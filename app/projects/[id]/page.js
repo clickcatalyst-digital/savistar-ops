@@ -1,0 +1,308 @@
+'use client';
+
+import { useEffect, useState, useCallback } from 'react';
+import Link from 'next/link';
+import { useParams, useRouter } from 'next/navigation';
+import { api, showToast, formatDate, capitalize } from '@/lib/client';
+import { todayISO } from '@/lib/date';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
+import { Badge } from '@/components/ui/badge';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
+import {
+  Dialog, DialogTrigger, DialogContent, DialogHeader, DialogTitle, DialogFooter,
+} from '@/components/ui/dialog';
+import {
+  Select, SelectTrigger, SelectValue, SelectContent, SelectGroup, SelectItem,
+} from '@/components/ui/select';
+import { ArrowLeftIcon, PlusIcon, PencilIcon, Trash2Icon, MapPinIcon, SendIcon } from 'lucide-react';
+
+export default function ProjectDetail() {
+  const { id } = useParams();
+  const router = useRouter();
+  const [p, setP] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [newMilestone, setNewMilestone] = useState({ title: '', due_date: '' });
+  const [newVisit, setNewVisit] = useState({ visit_date: '', notes: '' });
+  const [visitOpen, setVisitOpen] = useState(false);
+  const [msg, setMsg] = useState('');
+  const [editOpen, setEditOpen] = useState(false);
+  const [edit, setEdit] = useState(null);
+
+  const load = useCallback(async () => {
+    try { setP(await api(`/api/projects/${id}`)); }
+    catch (e) { showToast(e.message, 'error'); }
+  }, [id]);
+  useEffect(() => { load(); }, [load]);
+
+  async function addMilestone() {
+    try {
+      await api('/api/milestones', { method: 'POST', body: { project_id: Number(id), ...newMilestone } });
+      setNewMilestone({ title: '', due_date: '' });
+      load();
+    } catch (e) { showToast(e.message, 'error'); }
+  }
+
+  async function toggleMilestone(m) {
+    await api(`/api/milestones/${m.id}`, { method: 'PUT', body: { status: m.status === 'done' ? 'pending' : 'done' } });
+    load();
+  }
+
+  async function deleteMilestone(mid) {
+    await api(`/api/milestones/${mid}`, { method: 'DELETE' });
+    load();
+  }
+
+  async function addVisit() {
+    try {
+      await api('/api/site-visits', { method: 'POST', body: { project_id: Number(id), ...newVisit } });
+      showToast('Site visit logged');
+      setVisitOpen(false);
+      setNewVisit({ visit_date: '', notes: '' });
+      load();
+    } catch (e) { showToast(e.message, 'error'); }
+  }
+
+  async function sendMessage() {
+    if (!p.client_id) return showToast('Link a client to this project first', 'warning');
+    setBusy(true);
+    try {
+      await api(`/api/clients/${p.client_id}/conversations`, { method: 'POST', body: { body: msg, project_id: Number(id) } });
+      setMsg('');
+      load();
+    } catch (e) { showToast(e.message, 'error'); }
+    setBusy(false);
+  }
+
+  async function saveEdit() {
+    setBusy(true);
+    try {
+      await api(`/api/projects/${id}`, { method: 'PUT', body: edit });
+      showToast('Project updated');
+      setEditOpen(false);
+      load();
+    } catch (e) { showToast(e.message, 'error'); }
+    setBusy(false);
+  }
+
+  async function remove() {
+    if (!confirm(`Delete project "${p.name}"? Milestones and visits will be removed.`)) return;
+    try {
+      await api(`/api/projects/${id}`, { method: 'DELETE' });
+      router.push('/projects');
+    } catch (e) { showToast(e.message, 'error'); }
+  }
+
+  if (!p) return <div className="container py-10 text-muted-foreground">Loading…</div>;
+
+  const done = p.milestones.filter(m => m.status === 'done').length;
+
+  return (
+    <div className="container flex flex-col gap-4 py-6">
+      <div className="flex items-center gap-3">
+        <Button asChild variant="ghost" size="icon-sm"><Link href="/projects"><ArrowLeftIcon /></Link></Button>
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2">
+            <h1 className="truncate text-2xl font-bold tracking-tight">{p.name}</h1>
+            <Badge variant={p.status === 'active' ? 'default' : 'secondary'}>{capitalize(p.status)}</Badge>
+          </div>
+          <p className="text-sm text-muted-foreground">
+            {p.client_name ? <Link href={`/clients/${p.client_id}`} className="text-primary hover:underline">{p.client_name}</Link> : 'No client'}
+            {' '}· started {formatDate(p.start_date)} · {done}/{p.milestones.length} milestones done
+          </p>
+        </div>
+        <Dialog open={editOpen} onOpenChange={o => { setEditOpen(o); if (o) setEdit({ client_id: p.client_id, name: p.name, status: p.status, start_date: p.start_date || '', notes: p.notes || '' }); }}>
+          <DialogTrigger asChild><Button variant="outline" size="sm"><PencilIcon data-icon="inline-start" />Edit</Button></DialogTrigger>
+          <DialogContent>
+            <DialogHeader><DialogTitle>Edit project</DialogTitle></DialogHeader>
+            {edit && (
+              <div className="flex flex-col gap-4">
+                <div className="flex flex-col gap-2">
+                  <Label>Name</Label>
+                  <Input value={edit.name} onChange={e => setEdit({ ...edit, name: e.target.value })} />
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="flex flex-col gap-2">
+                    <Label>Status</Label>
+                    <Select value={edit.status} onValueChange={v => setEdit({ ...edit, status: v })}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectGroup>
+                          <SelectItem value="active">Active</SelectItem>
+                          <SelectItem value="on_hold">On hold</SelectItem>
+                          <SelectItem value="completed">Completed</SelectItem>
+                          <SelectItem value="cancelled">Cancelled</SelectItem>
+                        </SelectGroup>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="flex flex-col gap-2">
+                    <Label>Start date</Label>
+                    <Input type="date" value={edit.start_date} onChange={e => setEdit({ ...edit, start_date: e.target.value })} />
+                  </div>
+                </div>
+                <div className="flex flex-col gap-2">
+                  <Label>Notes</Label>
+                  <Textarea value={edit.notes} onChange={e => setEdit({ ...edit, notes: e.target.value })} />
+                </div>
+              </div>
+            )}
+            <DialogFooter className="sm:justify-between">
+              <Button variant="ghost" className="text-destructive" onClick={remove}><Trash2Icon data-icon="inline-start" />Delete</Button>
+              <div className="flex gap-2">
+                <Button variant="outline" onClick={() => setEditOpen(false)}>Cancel</Button>
+                <Button onClick={saveEdit} disabled={busy}>{busy ? 'Saving…' : 'Save'}</Button>
+              </div>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      </div>
+
+      {p.notes && <p className="rounded-md bg-muted px-3 py-2 text-sm text-muted-foreground">{p.notes}</p>}
+
+      <Tabs defaultValue="milestones">
+        <TabsList>
+          <TabsTrigger value="milestones">Milestones</TabsTrigger>
+          <TabsTrigger value="orders">Orders & materials</TabsTrigger>
+          <TabsTrigger value="visits">Site visits</TabsTrigger>
+          <TabsTrigger value="conversations">Conversations</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="milestones" className="mt-4">
+          <Card>
+            <CardContent className="flex flex-col gap-3 pt-6">
+              <div className="flex flex-col gap-2 sm:flex-row">
+                <Input placeholder="New milestone…" value={newMilestone.title}
+                  onChange={e => setNewMilestone({ ...newMilestone, title: e.target.value })} className="flex-1" />
+                <Input type="date" value={newMilestone.due_date}
+                  onChange={e => setNewMilestone({ ...newMilestone, due_date: e.target.value })} className="sm:w-44" />
+                <Button onClick={addMilestone} disabled={!newMilestone.title.trim()}><PlusIcon data-icon="inline-start" />Add</Button>
+              </div>
+              <div className="flex flex-col gap-1">
+                {p.milestones.length === 0 && <p className="py-4 text-center text-sm text-muted-foreground">No milestones yet — add the plan above.</p>}
+                {p.milestones.map(m => {
+                  const overdue = m.status !== 'done' && m.due_date && m.due_date < todayISO();
+                  return (
+                    <div key={m.id} className="group flex items-center gap-3 rounded-md px-2 py-2 hover:bg-muted">
+                      <Checkbox checked={m.status === 'done'} onCheckedChange={() => toggleMilestone(m)} />
+                      <span className={m.status === 'done' ? 'flex-1 text-sm text-muted-foreground line-through' : 'flex-1 text-sm'}>{m.title}</span>
+                      {m.due_date && (
+                        <span className={overdue ? 'text-xs font-medium text-destructive' : 'text-xs text-muted-foreground'}>
+                          {formatDate(m.due_date)}
+                        </span>
+                      )}
+                      <Button variant="ghost" size="icon-sm" className="opacity-0 group-hover:opacity-100" onClick={() => deleteMilestone(m.id)} aria-label="Delete milestone">
+                        <Trash2Icon className="text-muted-foreground" />
+                      </Button>
+                    </div>
+                  );
+                })}
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="orders" className="mt-4">
+          <div className="grid gap-4 lg:grid-cols-2">
+            <Card>
+              <CardHeader><CardTitle>Saag orders for this project</CardTitle></CardHeader>
+              <CardContent className="flex flex-col gap-2">
+                {p.orders.length === 0 && <p className="text-sm text-muted-foreground">No orders linked. Create one from the Orders tab and pick this project.</p>}
+                {p.orders.map(o => (
+                  <Link key={o.id} href={`/orders/${o.id}`} className="flex items-center justify-between rounded-md border px-3 py-2 text-sm hover:bg-muted">
+                    <span className="truncate font-medium">{o.item} × {o.qty}</span>
+                    <Badge variant={o.status === 'delivered' ? 'secondary' : 'default'}>{capitalize(o.status).replace('_', ' ')}</Badge>
+                  </Link>
+                ))}
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader><CardTitle>Vendor orders</CardTitle></CardHeader>
+              <CardContent className="flex flex-col gap-2">
+                {p.vendorPos.length === 0 && <p className="text-sm text-muted-foreground">No vendor POs linked. Create one from the Vendors tab and pick this project.</p>}
+                {p.vendorPos.map(vp => {
+                  const outstanding = vp.qty_ordered - vp.delivered + vp.returned;
+                  return (
+                    <Link key={vp.id} href={`/vendors/${vp.vendor_id}`} className="flex items-center justify-between rounded-md border px-3 py-2 text-sm hover:bg-muted">
+                      <span className="truncate">
+                        <span className="font-medium">{vp.item} × {vp.qty_ordered}</span>
+                        <span className="text-muted-foreground"> · {vp.vendor_name}</span>
+                      </span>
+                      {outstanding > 0
+                        ? <Badge variant="outline">{outstanding} pending</Badge>
+                        : <Badge variant="secondary">Complete</Badge>}
+                    </Link>
+                  );
+                })}
+              </CardContent>
+            </Card>
+          </div>
+        </TabsContent>
+
+        <TabsContent value="visits" className="mt-4">
+          <Card>
+            <CardHeader className="flex-row items-center justify-between">
+              <CardTitle>Site visits</CardTitle>
+              <Dialog open={visitOpen} onOpenChange={setVisitOpen}>
+                <DialogTrigger asChild><Button size="sm"><MapPinIcon data-icon="inline-start" />Log visit</Button></DialogTrigger>
+                <DialogContent>
+                  <DialogHeader><DialogTitle>Log site visit</DialogTitle></DialogHeader>
+                  <div className="flex flex-col gap-4">
+                    <div className="flex flex-col gap-2">
+                      <Label>Date</Label>
+                      <Input type="date" value={newVisit.visit_date} onChange={e => setNewVisit({ ...newVisit, visit_date: e.target.value })} />
+                    </div>
+                    <div className="flex flex-col gap-2">
+                      <Label>Notes</Label>
+                      <Textarea placeholder="What was discussed / measured / decided…" value={newVisit.notes} onChange={e => setNewVisit({ ...newVisit, notes: e.target.value })} />
+                    </div>
+                  </div>
+                  <DialogFooter>
+                    <Button variant="outline" onClick={() => setVisitOpen(false)}>Cancel</Button>
+                    <Button onClick={addVisit} disabled={!newVisit.visit_date}>Save</Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
+            </CardHeader>
+            <CardContent className="flex flex-col gap-3">
+              {p.visits.length === 0 && <p className="py-4 text-center text-sm text-muted-foreground">No site visits logged.</p>}
+              {p.visits.map(v => (
+                <div key={v.id} className="rounded-lg border p-3">
+                  <div className="flex items-center justify-between">
+                    <p className="text-sm font-medium">{formatDate(v.visit_date)}</p>
+                    <p className="text-xs text-muted-foreground">{v.visited_by}</p>
+                  </div>
+                  {v.notes && <p className="mt-1 whitespace-pre-wrap text-sm text-muted-foreground">{v.notes}</p>}
+                </div>
+              ))}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="conversations" className="mt-4">
+          <Card>
+            <CardContent className="flex flex-col gap-4 pt-6">
+              <div className="flex flex-col gap-2">
+                <Textarea placeholder="Log a client conversation for this project…" value={msg} onChange={e => setMsg(e.target.value)} />
+                <Button size="sm" className="self-end" onClick={sendMessage} disabled={busy || !msg.trim()}>
+                  <SendIcon data-icon="inline-start" />Log
+                </Button>
+              </div>
+              {p.conversations.length === 0 && <p className="py-2 text-center text-sm text-muted-foreground">No conversations for this project yet.</p>}
+              {p.conversations.map(cv => (
+                <div key={cv.id} className="rounded-lg border p-3">
+                  <p className="whitespace-pre-wrap text-sm">{cv.body}</p>
+                  <p className="mt-1.5 text-xs text-muted-foreground">{cv.created_by || 'unknown'} · {formatDate(cv.created_at)}</p>
+                </div>
+              ))}
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
+    </div>
+  );
+}

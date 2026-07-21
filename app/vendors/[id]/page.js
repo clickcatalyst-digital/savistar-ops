@@ -1,0 +1,450 @@
+'use client';
+
+import { useEffect, useState, useCallback } from 'react';
+import Link from 'next/link';
+import { useParams, useRouter } from 'next/navigation';
+import { api, showToast, formatDate, capitalize } from '@/lib/client';
+import { todayISO } from '@/lib/date';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
+import { Badge } from '@/components/ui/badge';
+import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
+import {
+  Dialog, DialogTrigger, DialogContent, DialogHeader, DialogTitle, DialogFooter,
+} from '@/components/ui/dialog';
+import {
+  Select, SelectTrigger, SelectValue, SelectContent, SelectGroup, SelectItem,
+} from '@/components/ui/select';
+import {
+  Table, TableHeader, TableRow, TableHead, TableBody, TableCell,
+} from '@/components/ui/table';
+import { ArrowLeftIcon, PlusIcon, PencilIcon, Trash2Icon, AlertTriangleIcon, PackageCheckIcon } from 'lucide-react';
+
+export default function VendorDetail() {
+  const { id } = useParams();
+  const router = useRouter();
+  const [v, setV] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
+  const [edit, setEdit] = useState(null);
+
+  const load = useCallback(async () => {
+    try { setV(await api(`/api/vendors/${id}`)); }
+    catch (e) { showToast(e.message, 'error'); }
+  }, [id]);
+  useEffect(() => { load(); }, [load]);
+
+  async function saveEdit() {
+    setBusy(true);
+    try {
+      await api(`/api/vendors/${id}`, { method: 'PUT', body: edit });
+      showToast('Vendor updated');
+      setEditOpen(false);
+      load();
+    } catch (e) { showToast(e.message, 'error'); }
+    setBusy(false);
+  }
+
+  async function remove() {
+    if (!confirm(`Delete vendor "${v.name}"? Rate card, freight log and POs will be removed.`)) return;
+    try {
+      await api(`/api/vendors/${id}`, { method: 'DELETE' });
+      router.push('/vendors');
+    } catch (e) { showToast(e.message, 'error'); }
+  }
+
+  if (!v) return <div className="container py-10 text-muted-foreground">Loading…</div>;
+
+  return (
+    <div className="container flex flex-col gap-4 py-6">
+      <div className="flex items-center gap-3">
+        <Button asChild variant="ghost" size="icon-sm"><Link href="/vendors"><ArrowLeftIcon /></Link></Button>
+        <div className="min-w-0 flex-1">
+          <h1 className="truncate text-2xl font-bold tracking-tight">{v.name}</h1>
+          <p className="text-sm text-muted-foreground">
+            {[v.material, v.phone].filter(Boolean).join(' · ') || 'No details'}
+          </p>
+        </div>
+        <Dialog open={editOpen} onOpenChange={o => { setEditOpen(o); if (o) setEdit({ name: v.name, phone: v.phone || '', material: v.material || '', notes: v.notes || '' }); }}>
+          <DialogTrigger asChild><Button variant="outline" size="sm"><PencilIcon data-icon="inline-start" />Edit</Button></DialogTrigger>
+          <DialogContent>
+            <DialogHeader><DialogTitle>Edit vendor</DialogTitle></DialogHeader>
+            {edit && (
+              <div className="flex flex-col gap-4">
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="flex flex-col gap-2">
+                    <Label>Name</Label>
+                    <Input value={edit.name} onChange={e => setEdit({ ...edit, name: e.target.value })} />
+                  </div>
+                  <div className="flex flex-col gap-2">
+                    <Label>Phone</Label>
+                    <Input value={edit.phone} onChange={e => setEdit({ ...edit, phone: e.target.value })} />
+                  </div>
+                </div>
+                <div className="flex flex-col gap-2">
+                  <Label>Material</Label>
+                  <Input value={edit.material} onChange={e => setEdit({ ...edit, material: e.target.value })} />
+                </div>
+                <div className="flex flex-col gap-2">
+                  <Label>Notes</Label>
+                  <Textarea value={edit.notes} onChange={e => setEdit({ ...edit, notes: e.target.value })} />
+                </div>
+              </div>
+            )}
+            <DialogFooter className="sm:justify-between">
+              <Button variant="ghost" className="text-destructive" onClick={remove}><Trash2Icon data-icon="inline-start" />Delete</Button>
+              <div className="flex gap-2">
+                <Button variant="outline" onClick={() => setEditOpen(false)}>Cancel</Button>
+                <Button onClick={saveEdit} disabled={busy}>{busy ? 'Saving…' : 'Save'}</Button>
+              </div>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      </div>
+
+      {v.notes && <p className="rounded-md bg-muted px-3 py-2 text-sm text-muted-foreground">{v.notes}</p>}
+
+      <Tabs defaultValue="pos">
+        <TabsList>
+          <TabsTrigger value="pos">Purchase orders</TabsTrigger>
+          <TabsTrigger value="freight">Freight & rates</TabsTrigger>
+        </TabsList>
+        <TabsContent value="pos" className="mt-4">
+          <PosTab vendorId={Number(id)} pos={v.pos} onChanged={load} />
+        </TabsContent>
+        <TabsContent value="freight" className="mt-4">
+          <FreightTab vendorId={Number(id)} rates={v.rates} freight={v.freight} onChanged={load} />
+        </TabsContent>
+      </Tabs>
+    </div>
+  );
+}
+
+/* ---------------- Purchase orders ---------------- */
+
+function PosTab({ vendorId, pos, onChanged }) {
+  const [orders, setOrders] = useState([]);
+  const [projects, setProjects] = useState([]);
+  const [open, setOpen] = useState(false);
+  const [form, setForm] = useState({ item: '', qty_ordered: '', rate: '', order_id: '', project_id: '', ordered_on: todayISO(), notes: '' });
+  const [delivery, setDelivery] = useState(null); // { poId, date, qty_delivered, qty_returned, notes }
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    api('/api/orders?status=all').then(setOrders).catch(() => {});
+    api('/api/projects').then(setProjects).catch(() => {});
+  }, []);
+
+  async function createPo() {
+    setBusy(true);
+    try {
+      await api('/api/vendor-pos', {
+        method: 'POST',
+        body: {
+          vendor_id: vendorId, item: form.item, qty_ordered: Number(form.qty_ordered),
+          rate: form.rate ? Number(form.rate) : null,
+          order_id: form.order_id ? Number(form.order_id) : null,
+          project_id: form.project_id ? Number(form.project_id) : null,
+          ordered_on: form.ordered_on, notes: form.notes,
+        },
+      });
+      showToast('PO created');
+      setOpen(false);
+      setForm({ item: '', qty_ordered: '', rate: '', order_id: '', project_id: '', ordered_on: todayISO(), notes: '' });
+      onChanged();
+    } catch (e) { showToast(e.message, 'error'); }
+    setBusy(false);
+  }
+
+  async function recordDelivery() {
+    setBusy(true);
+    try {
+      const r = await api(`/api/vendor-pos/${delivery.poId}/deliveries`, {
+        method: 'POST',
+        body: {
+          date: delivery.date,
+          qty_delivered: Number(delivery.qty_delivered) || 0,
+          qty_returned: Number(delivery.qty_returned) || 0,
+          notes: delivery.notes || null,
+        },
+      });
+      showToast(r.outstanding <= 0 ? 'Recorded — PO complete' : `Recorded — ${r.outstanding} still pending`);
+      setDelivery(null);
+      onChanged();
+    } catch (e) { showToast(e.message, 'error'); }
+    setBusy(false);
+  }
+
+  async function cancelPo(po) {
+    if (!confirm(`Cancel PO for ${po.item}?`)) return;
+    await api(`/api/vendor-pos/${po.id}`, { method: 'PUT', body: { status: 'cancelled' } });
+    onChanged();
+  }
+
+  return (
+    <div className="flex flex-col gap-4">
+      <div className="flex justify-end">
+        <Dialog open={open} onOpenChange={setOpen}>
+          <DialogTrigger asChild><Button><PlusIcon data-icon="inline-start" />New PO</Button></DialogTrigger>
+          <DialogContent>
+            <DialogHeader><DialogTitle>New purchase order</DialogTitle></DialogHeader>
+            <div className="flex flex-col gap-4">
+              <div className="grid grid-cols-3 gap-3">
+                <div className="col-span-2 flex flex-col gap-2">
+                  <Label>Item / material</Label>
+                  <Input placeholder="e.g. 19mm plywood sheet" value={form.item} onChange={e => setForm({ ...form, item: e.target.value })} />
+                </div>
+                <div className="flex flex-col gap-2">
+                  <Label>Qty</Label>
+                  <Input type="number" min="1" value={form.qty_ordered} onChange={e => setForm({ ...form, qty_ordered: e.target.value })} />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="flex flex-col gap-2">
+                  <Label>Rate per unit (₹)</Label>
+                  <Input type="number" min="0" value={form.rate} onChange={e => setForm({ ...form, rate: e.target.value })} />
+                </div>
+                <div className="flex flex-col gap-2">
+                  <Label>Ordered on</Label>
+                  <Input type="date" value={form.ordered_on} onChange={e => setForm({ ...form, ordered_on: e.target.value })} />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="flex flex-col gap-2">
+                  <Label>For Saag order</Label>
+                  <Select value={form.order_id} onValueChange={val => setForm({ ...form, order_id: val })}>
+                    <SelectTrigger><SelectValue placeholder="Optional" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectGroup>
+                        {orders.map(o => <SelectItem key={o.id} value={String(o.id)}>{o.item} × {o.qty}</SelectItem>)}
+                      </SelectGroup>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="flex flex-col gap-2">
+                  <Label>For Savistar project</Label>
+                  <Select value={form.project_id} onValueChange={val => setForm({ ...form, project_id: val })}>
+                    <SelectTrigger><SelectValue placeholder="Optional" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectGroup>
+                        {projects.map(p => <SelectItem key={p.id} value={String(p.id)}>{p.name}</SelectItem>)}
+                      </SelectGroup>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
+              <Button onClick={createPo} disabled={busy || !form.item.trim() || !form.qty_ordered}>Create</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      </div>
+
+      {pos.length === 0 && <p className="py-8 text-center text-muted-foreground">No purchase orders for this vendor.</p>}
+
+      {pos.map(po => {
+        const outstanding = po.qty_ordered - po.delivered + po.returned;
+        return (
+          <Card key={po.id}>
+            <CardContent className="flex flex-col gap-3 pt-4">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="font-medium">{po.item} × {po.qty_ordered}</span>
+                {po.rate && <span className="text-sm text-muted-foreground">@ ₹{po.rate}</span>}
+                <Badge variant={po.status === 'complete' ? 'secondary' : po.status === 'cancelled' ? 'destructive' : 'default'}>
+                  {capitalize(po.status)}
+                </Badge>
+                {po.status === 'open' && outstanding > 0 && <Badge variant="outline">{outstanding} pending</Badge>}
+                <span className="ml-auto text-xs text-muted-foreground">
+                  {formatDate(po.ordered_on)}
+                  {po.order_item && <> · for <Link href={`/orders/${po.order_id}`} className="text-primary hover:underline">{po.order_item}</Link></>}
+                  {po.project_name && <> · <Link href={`/projects/${po.project_id}`} className="text-primary hover:underline">{po.project_name}</Link></>}
+                </span>
+              </div>
+
+              {po.deliveries.length > 0 && (
+                <div className="flex flex-col gap-1 border-t pt-2">
+                  {po.deliveries.map(d => (
+                    <div key={d.id} className="flex items-center gap-3 text-sm text-muted-foreground">
+                      <span className="w-24 shrink-0">{formatDate(d.date)}</span>
+                      {d.qty_delivered > 0 && <span className="text-foreground">+{d.qty_delivered} delivered</span>}
+                      {d.qty_returned > 0 && <span className="text-destructive">−{d.qty_returned} returned</span>}
+                      {d.notes && <span className="truncate">· {d.notes}</span>}
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {po.status === 'open' && (
+                <div className="flex gap-2">
+                  <Button size="sm" variant="outline" onClick={() => setDelivery({ poId: po.id, date: todayISO(), qty_delivered: '', qty_returned: '', notes: '' })}>
+                    <PackageCheckIcon data-icon="inline-start" />Record delivery / return
+                  </Button>
+                  <Button size="sm" variant="ghost" className="text-muted-foreground" onClick={() => cancelPo(po)}>Cancel PO</Button>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        );
+      })}
+
+      <Dialog open={!!delivery} onOpenChange={o => !o && setDelivery(null)}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Record delivery / return</DialogTitle></DialogHeader>
+          {delivery && (
+            <div className="flex flex-col gap-4">
+              <div className="grid grid-cols-3 gap-3">
+                <div className="flex flex-col gap-2">
+                  <Label>Date</Label>
+                  <Input type="date" value={delivery.date} onChange={e => setDelivery({ ...delivery, date: e.target.value })} />
+                </div>
+                <div className="flex flex-col gap-2">
+                  <Label>Qty delivered</Label>
+                  <Input type="number" min="0" value={delivery.qty_delivered} onChange={e => setDelivery({ ...delivery, qty_delivered: e.target.value })} />
+                </div>
+                <div className="flex flex-col gap-2">
+                  <Label>Qty returned</Label>
+                  <Input type="number" min="0" value={delivery.qty_returned} onChange={e => setDelivery({ ...delivery, qty_returned: e.target.value })} />
+                </div>
+              </div>
+              <div className="flex flex-col gap-2">
+                <Label>Notes</Label>
+                <Input placeholder="e.g. 2 sheets damaged, returned" value={delivery.notes} onChange={e => setDelivery({ ...delivery, notes: e.target.value })} />
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDelivery(null)}>Cancel</Button>
+            <Button onClick={recordDelivery} disabled={busy || (!delivery?.qty_delivered && !delivery?.qty_returned)}>Save</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
+
+/* ---------------- Freight & rate card ---------------- */
+
+function FreightTab({ vendorId, rates, freight, onChanged }) {
+  const [rate, setRate] = useState({ from_loc: '', to_loc: '', expected_amount: '' });
+  const [charge, setCharge] = useState({ date: todayISO(), from_loc: '', to_loc: '', amount: '', notes: '' });
+  const [busy, setBusy] = useState(false);
+
+  async function addRate() {
+    setBusy(true);
+    try {
+      await api('/api/vendor-rates', { method: 'POST', body: { vendor_id: vendorId, ...rate, expected_amount: Number(rate.expected_amount) } });
+      setRate({ from_loc: '', to_loc: '', expected_amount: '' });
+      onChanged();
+    } catch (e) { showToast(e.message, 'error'); }
+    setBusy(false);
+  }
+
+  async function deleteRate(id) {
+    await api(`/api/vendor-rates/${id}`, { method: 'DELETE' });
+    onChanged();
+  }
+
+  async function addCharge() {
+    setBusy(true);
+    try {
+      const r = await api('/api/freight', { method: 'POST', body: { vendor_id: vendorId, ...charge, amount: Number(charge.amount) } });
+      if (r.overcharged) showToast(`Above rate card! Expected ₹${r.expected_amount.toLocaleString('en-IN')}`, 'warning');
+      else showToast('Freight charge logged');
+      setCharge({ date: todayISO(), from_loc: '', to_loc: '', amount: '', notes: '' });
+      onChanged();
+    } catch (e) { showToast(e.message, 'error'); }
+    setBusy(false);
+  }
+
+  async function deleteCharge(id) {
+    await api(`/api/freight/${id}`, { method: 'DELETE' });
+    onChanged();
+  }
+
+  return (
+    <div className="grid gap-4 lg:grid-cols-5">
+      <Card className="lg:col-span-2">
+        <CardHeader>
+          <CardTitle>Rate card</CardTitle>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-3">
+          <div className="flex flex-wrap items-end gap-2">
+            <Input placeholder="From" value={rate.from_loc} onChange={e => setRate({ ...rate, from_loc: e.target.value })} className="w-28 flex-1" />
+            <Input placeholder="To" value={rate.to_loc} onChange={e => setRate({ ...rate, to_loc: e.target.value })} className="w-28 flex-1" />
+            <Input type="number" placeholder="₹ expected" value={rate.expected_amount} onChange={e => setRate({ ...rate, expected_amount: e.target.value })} className="w-28" />
+            <Button size="sm" onClick={addRate} disabled={busy || !rate.from_loc || !rate.to_loc || !rate.expected_amount}><PlusIcon /></Button>
+          </div>
+          {rates.length === 0 && <p className="text-sm text-muted-foreground">No routes yet. Add the agreed freight per route — charges above it get flagged.</p>}
+          {rates.map(r => (
+            <div key={r.id} className="group flex items-center gap-2 rounded-md border px-3 py-2 text-sm">
+              <span className="font-medium">{r.from_loc} → {r.to_loc}</span>
+              <span className="ml-auto">₹{r.expected_amount.toLocaleString('en-IN')}</span>
+              <Button variant="ghost" size="icon-sm" className="opacity-0 group-hover:opacity-100" onClick={() => deleteRate(r.id)} aria-label="Delete rate">
+                <Trash2Icon className="text-muted-foreground" />
+              </Button>
+            </div>
+          ))}
+        </CardContent>
+      </Card>
+
+      <Card className="lg:col-span-3">
+        <CardHeader><CardTitle>Freight charges</CardTitle></CardHeader>
+        <CardContent className="flex flex-col gap-3">
+          <div className="flex flex-wrap items-end gap-2">
+            <Input type="date" value={charge.date} onChange={e => setCharge({ ...charge, date: e.target.value })} className="w-36" />
+            <Input placeholder="From" value={charge.from_loc} onChange={e => setCharge({ ...charge, from_loc: e.target.value })} className="w-24 flex-1" />
+            <Input placeholder="To" value={charge.to_loc} onChange={e => setCharge({ ...charge, to_loc: e.target.value })} className="w-24 flex-1" />
+            <Input type="number" placeholder="₹ charged" value={charge.amount} onChange={e => setCharge({ ...charge, amount: e.target.value })} className="w-28" />
+            <Button size="sm" onClick={addCharge} disabled={busy || !charge.from_loc || !charge.to_loc || !charge.amount}><PlusIcon /></Button>
+          </div>
+          {freight.length === 0 && <p className="text-sm text-muted-foreground">No freight logged yet.</p>}
+          {freight.length > 0 && (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Date</TableHead>
+                  <TableHead>Route</TableHead>
+                  <TableHead className="text-right">Charged</TableHead>
+                  <TableHead className="text-right">Expected</TableHead>
+                  <TableHead className="text-right" aria-label="Flag" />
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {freight.map(f => {
+                  const over = f.expected_amount != null && f.amount > f.expected_amount;
+                  return (
+                    <TableRow key={f.id} className="group">
+                      <TableCell className="whitespace-nowrap">{formatDate(f.date)}</TableCell>
+                      <TableCell>{f.from_loc} → {f.to_loc}</TableCell>
+                      <TableCell className={over ? 'text-right font-medium text-destructive' : 'text-right'}>
+                        ₹{f.amount.toLocaleString('en-IN')}
+                      </TableCell>
+                      <TableCell className="text-right text-muted-foreground">
+                        {f.expected_amount != null ? `₹${f.expected_amount.toLocaleString('en-IN')}` : 'no rate'}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        {over && (
+                          <Badge variant="destructive">
+                            <AlertTriangleIcon data-icon="inline-start" />+₹{(f.amount - f.expected_amount).toLocaleString('en-IN')}
+                          </Badge>
+                        )}
+                        <Button variant="ghost" size="icon-sm" className="ml-1 opacity-0 group-hover:opacity-100" onClick={() => deleteCharge(f.id)} aria-label="Delete charge">
+                          <Trash2Icon className="text-muted-foreground" />
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  );
+}

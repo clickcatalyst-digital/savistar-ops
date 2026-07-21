@@ -1,0 +1,46 @@
+// Bank statements: list + upload (PDF → R2 → async AI extraction).
+import { NextResponse } from 'next/server';
+import { queryAll, execute } from '@/lib/db';
+import { uploadToR2, isR2Configured } from '@/lib/r2';
+import { runExtraction } from '@/lib/extract';
+import { getUserFromRequest, requireNonStaff } from '@/lib/auth';
+
+export async function GET(req) {
+  const guard = requireNonStaff(getUserFromRequest(req));
+  if (guard) return guard;
+  // Stale 'reading' rows (server restarted mid-extraction) get failed after 5 min.
+  await execute(`UPDATE documents SET status = 'extract_failed', extract_error = 'Timeout'
+    WHERE status = 'reading' AND created_at < datetime('now', '-5 minutes')`);
+  const rows = await queryAll(
+    `SELECT id, doc_type, original_filename, file_url, status, bank_name, account_no,
+       statement_from, statement_to, opening_balance, closing_balance, total_debit, total_credit,
+       extract_error, uploaded_by, created_at
+     FROM documents ORDER BY created_at DESC`);
+  return NextResponse.json(rows);
+}
+
+export async function POST(req) {
+  const user = getUserFromRequest(req);
+  const guard = requireNonStaff(user);
+  if (guard) return guard;
+  const form = await req.formData();
+  const file = form.get('file');
+  const bankName = form.get('bank_name') || null;
+  if (!file) return NextResponse.json({ error: 'No PDF uploaded' }, { status: 400 });
+  if (file.size > 20 * 1024 * 1024) return NextResponse.json({ error: 'Max file size is 20 MB' }, { status: 400 });
+  if (!process.env.OPENROUTER_API_KEY) {
+    return NextResponse.json({ error: 'AI extraction not configured (OPENROUTER_API_KEY missing)' }, { status: 503 });
+  }
+
+  const buffer = Buffer.from(await file.arrayBuffer());
+  let fileUrl = null;
+  if (isR2Configured()) {
+    fileUrl = await uploadToR2(buffer, file.name, 'application/pdf');
+  }
+  const { lastId } = await execute(
+    `INSERT INTO documents (doc_type, original_filename, file_url, status, bank_name, uploaded_by)
+     VALUES ('bank_statement', ?, ?, 'reading', ?, ?)`,
+    [file.name, fileUrl, bankName, user?.username || null]);
+  runExtraction(lastId, buffer); // fire-and-forget; UI polls status
+  return NextResponse.json({ id: lastId, status: 'reading' });
+}
