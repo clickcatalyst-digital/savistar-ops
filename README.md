@@ -14,13 +14,14 @@ npm install
 npm run dev        # http://localhost:3000
 ```
 
-First run auto-creates the schema and seeds three logins — change these passwords in Settings
-right after first login:
+First run auto-creates the schema and seeds four logins — change these passwords via the nav
+menu (Change password, visible to everyone) right after first login:
 
 | Username | Password | Role |
 |----------|----------|------|
-| `hari` | `hari123` | Admin (owner) |
-| `sachi` | `sachi123` | Admin (owner) |
+| `hari` | `hari123` | Owner |
+| `sachi` | `sachi123` | Owner |
+| `admin` | `admin123` | Admin |
 | `dristi` | `dristi123` | Staff (office) — no Finance access |
 
 Copy `env.example` to `.env.local` and fill what you need — everything degrades gracefully:
@@ -40,15 +41,18 @@ without `TURSO_URL` data goes to `./savistar-ops-local.db`.
 - **Finance** — Cash: manual credit/debit ledger with file attachments. Bank: upload statement PDF →
   AI extracts transactions → review with per-line notes and receipt attachments. Hidden entirely
   from staff — no nav link, direct URL redirects away, and every finance API route rejects them
-- **Settings** — user management (admin/manager only). Roles: admin, manager, user (staff);
-  deleting records requires admin/manager
+- **Settings** — user management (owner/admin/manager only). Roles: owner, admin, manager,
+  user (staff); deleting records requires owner/admin/manager
 
 ## Roles
 
-- **admin / manager** — full access to every tab including Finance; can assign tasks to anyone,
-  see everyone's tasks on Home, manage users in Settings
+- **owner / admin / manager** — full access to every tab including Finance; can assign tasks to
+  anyone, see everyone's tasks on Home, manage users in Settings. "Owner" and "admin" carry
+  identical permissions — the labels just distinguish the business owners from a general admin login
 - **user (staff)** — everything except Finance and Settings; Home only shows tasks assigned to
   them, and they can only create tasks for themselves (not assign to others)
+
+Everyone, regardless of role, can change their own password from the nav menu (⚙ → Change password).
 
 ## Deploy (Render)
 
@@ -57,6 +61,6 @@ Plain Node web service — no Docker:
 - Build command: `npm install && npm run build`
 - Start command: `npm start`
 - Env vars: everything from `env.example` (set `TURSO_URL`/`TURSO_AUTH_TOKEN`, a real
-  `SESSION_SECRET`, `ADMIN_PASSWORD`, the `R2_*` set, `OPENROUTER_API_KEY`)
+  `SESSION_SECRET`, the `R2_*` set, `OPENROUTER_API_KEY`)
 
 Create a **new** Turso DB and a **new** R2 bucket for this company — do not reuse ls_crm's.

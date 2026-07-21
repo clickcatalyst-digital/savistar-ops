@@ -5,14 +5,20 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import {
   SunIcon, MoonIcon, SettingsIcon, LogOutIcon, LayoutDashboardIcon,
-  UsersIcon, FolderKanbanIcon, ArmchairIcon, HardHatIcon, TruckIcon, WalletIcon,
+  UsersIcon, FolderKanbanIcon, ArmchairIcon, HardHatIcon, TruckIcon, WalletIcon, KeyRoundIcon,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { api, showToast } from '@/lib/client';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import {
   DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem,
   DropdownMenuSeparator, DropdownMenuLabel, DropdownMenuGroup,
 } from '@/components/ui/dropdown-menu';
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
+} from '@/components/ui/dialog';
 
 const LINKS = [
   { href: '/', label: 'Home', icon: LayoutDashboardIcon },
@@ -24,11 +30,14 @@ const LINKS = [
   { href: '/finance', label: 'Finance', icon: WalletIcon },
 ];
 
+const ROLE_LABELS = { owner: 'Owner', admin: 'Admin', manager: 'Manager', user: 'Staff' };
+
 export default function Nav({ user }) {
   const pathname = usePathname();
   const links = user?.role === 'user' ? LINKS.filter(l => l.href !== '/finance') : LINKS;
   const router = useRouter();
   const [theme, setTheme] = useState('light');
+  const [pwOpen, setPwOpen] = useState(false);
 
   const isActive = l => (l.href === '/' ? pathname === '/' : pathname.startsWith(l.href));
 
@@ -81,13 +90,16 @@ export default function Nav({ user }) {
               <DropdownMenuContent align="end" className="w-52">
                 <DropdownMenuLabel className="font-normal">
                   <div className="text-sm font-medium">{user?.display_name || user?.username}</div>
-                  <div className="text-xs text-muted-foreground">@{user?.username} · {user?.role}</div>
+                  <div className="text-xs text-muted-foreground">@{user?.username} · {ROLE_LABELS[user?.role] || user?.role}</div>
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator />
                 <DropdownMenuGroup>
                   <DropdownMenuItem onClick={toggleTheme}>
                     {theme === 'dark' ? <SunIcon data-icon="inline-start" /> : <MoonIcon data-icon="inline-start" />}
                     {theme === 'dark' ? 'Light mode' : 'Dark mode'}
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onSelect={e => { e.preventDefault(); setPwOpen(true); }}>
+                    <KeyRoundIcon data-icon="inline-start" />Change password
                   </DropdownMenuItem>
                   {user?.role !== 'user' && (
                     <DropdownMenuItem onClick={() => router.push('/settings')}>
@@ -121,6 +133,53 @@ export default function Nav({ user }) {
           })}
         </div>
       </nav>
+
+      <ChangePasswordDialog open={pwOpen} onOpenChange={setPwOpen} />
     </>
+  );
+}
+
+function ChangePasswordDialog({ open, onOpenChange }) {
+  const [pw, setPw] = useState('');
+  const [confirm, setConfirm] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  function reset() {
+    setPw('');
+    setConfirm('');
+  }
+
+  async function save() {
+    if (pw !== confirm) return showToast('Passwords do not match', 'error');
+    setBusy(true);
+    try {
+      await api('/api/me/password', { method: 'PUT', body: { password: pw } });
+      showToast('Password changed');
+      onOpenChange(false);
+      reset();
+    } catch (e) { showToast(e.message, 'error'); }
+    setBusy(false);
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={o => { onOpenChange(o); if (!o) reset(); }}>
+      <DialogContent>
+        <DialogHeader><DialogTitle>Change password</DialogTitle></DialogHeader>
+        <div className="flex flex-col gap-4">
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="new-pw">New password</Label>
+            <Input id="new-pw" type="password" value={pw} onChange={e => setPw(e.target.value)} autoFocus />
+          </div>
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="confirm-pw">Confirm password</Label>
+            <Input id="confirm-pw" type="password" value={confirm} onChange={e => setConfirm(e.target.value)} />
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
+          <Button onClick={save} disabled={busy || !pw || !confirm}>{busy ? 'Saving…' : 'Save'}</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }

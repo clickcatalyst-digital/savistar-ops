@@ -83,7 +83,7 @@ export default function SettingsPage() {
   if (forbidden) {
     return (
       <div className="container py-10">
-        <p className="text-center text-muted-foreground">Only admins and managers can manage users.</p>
+        <p className="text-center text-muted-foreground">Only owners, admins, and managers can manage users.</p>
       </div>
     );
   }
@@ -124,6 +124,7 @@ export default function SettingsPage() {
                         <SelectItem value="user">Staff</SelectItem>
                         <SelectItem value="manager">Manager</SelectItem>
                         <SelectItem value="admin">Admin</SelectItem>
+                        <SelectItem value="owner">Owner</SelectItem>
                       </SelectGroup>
                     </SelectContent>
                   </Select>
@@ -141,7 +142,7 @@ export default function SettingsPage() {
       <Card>
         <CardHeader>
           <CardTitle>Users</CardTitle>
-          <CardDescription>Staff can use every tab; only admins and managers can delete records or manage users.</CardDescription>
+          <CardDescription>Staff can use every tab except Finance; only owners, admins, and managers can delete records or manage users. Everyone can change their own password from the nav menu.</CardDescription>
         </CardHeader>
         <CardContent>
           <Table>
@@ -168,6 +169,7 @@ export default function SettingsPage() {
                           <SelectItem value="user">Staff</SelectItem>
                           <SelectItem value="manager">Manager</SelectItem>
                           <SelectItem value="admin">Admin</SelectItem>
+                          <SelectItem value="owner">Owner</SelectItem>
                         </SelectGroup>
                       </SelectContent>
                     </Select>
