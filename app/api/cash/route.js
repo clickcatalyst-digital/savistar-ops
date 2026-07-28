@@ -7,16 +7,19 @@ export async function GET(req) {
   if (guard) return guard;
   const { searchParams } = new URL(req.url);
   const month = searchParams.get('month'); // optional YYYY-MM filter
-  const where = month ? `WHERE strftime('%Y-%m', date) = ?` : '';
+  const where = month ? `AND strftime('%Y-%m', t.date) = ?` : '';
   const args = month ? [month] : [];
   const [rows, totals] = await Promise.all([
     queryAll(`SELECT t.*,
-        (SELECT COUNT(*) FROM attachments a WHERE a.entity_type = 'cash_transaction' AND a.entity_id = t.id) AS attachment_count
-      FROM cash_transactions t ${where} ORDER BY t.date DESC, t.id DESC`, args),
+        (SELECT COUNT(*) FROM attachments a WHERE a.entity_type = 'cash_transaction'
+          AND a.entity_id = t.id AND a.is_deleted_record = 0) AS attachment_count
+      FROM cash_transactions t
+      WHERE t.is_deleted_record = 0 ${where}
+      ORDER BY t.date DESC, t.id DESC`, args),
     queryAll(`SELECT
         COALESCE(SUM(CASE WHEN kind = 'credit' THEN amount END), 0) AS total_credit,
         COALESCE(SUM(CASE WHEN kind = 'debit' THEN amount END), 0) AS total_debit
-      FROM cash_transactions`),
+      FROM cash_transactions WHERE is_deleted_record = 0`),
   ]);
   const balance = totals[0].total_credit - totals[0].total_debit;
   return NextResponse.json({ rows, balance, ...totals[0] });

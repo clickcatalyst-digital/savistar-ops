@@ -21,7 +21,8 @@ import {
 import {
   Table, TableHeader, TableRow, TableHead, TableBody, TableCell,
 } from '@/components/ui/table';
-import { ArrowLeftIcon, PlusIcon, PencilIcon, Trash2Icon, AlertTriangleIcon, PackageCheckIcon } from 'lucide-react';
+import { ArrowLeftIcon, PlusIcon, PencilIcon, AlertTriangleIcon, PackageCheckIcon } from 'lucide-react';
+import { TrashIcon } from '@heroicons/react/24/outline';
 
 export default function VendorDetail() {
   const { id } = useParams();
@@ -95,7 +96,7 @@ export default function VendorDetail() {
               </div>
             )}
             <DialogFooter className="sm:justify-between">
-              <Button variant="ghost" className="text-destructive" onClick={remove}><Trash2Icon data-icon="inline-start" />Delete</Button>
+              <Button variant="ghost" className="text-destructive transition-colors hover:bg-destructive/10 hover:text-destructive dark:hover:bg-destructive/20" onClick={remove}><TrashIcon data-icon="inline-start" />Delete</Button>
               <div className="flex gap-2">
                 <Button variant="outline" onClick={() => setEditOpen(false)}>Cancel</Button>
                 <Button onClick={saveEdit} disabled={busy}>{busy ? 'Saving…' : 'Save'}</Button>
@@ -384,8 +385,8 @@ function FreightTab({ vendorId, rates, freight, onChanged }) {
             <div key={r.id} className="group flex items-center gap-2 rounded-md border px-3 py-2 text-sm">
               <span className="font-medium">{r.from_loc} → {r.to_loc}</span>
               <span className="ml-auto">₹{r.expected_amount.toLocaleString('en-IN')}</span>
-              <Button variant="ghost" size="icon-sm" className="opacity-0 group-hover:opacity-100" onClick={() => deleteRate(r.id)} aria-label="Delete rate">
-                <Trash2Icon className="text-muted-foreground" />
+              <Button variant="ghost" size="icon-sm" className="text-muted-foreground/60 transition-colors hover:bg-destructive/10 hover:text-destructive dark:hover:bg-destructive/20" onClick={() => deleteRate(r.id)} aria-label="Delete rate">
+                <TrashIcon />
               </Button>
             </div>
           ))}
@@ -433,8 +434,8 @@ function FreightTab({ vendorId, rates, freight, onChanged }) {
                             <AlertTriangleIcon data-icon="inline-start" />+₹{(f.amount - f.expected_amount).toLocaleString('en-IN')}
                           </Badge>
                         )}
-                        <Button variant="ghost" size="icon-sm" className="ml-1 opacity-0 group-hover:opacity-100" onClick={() => deleteCharge(f.id)} aria-label="Delete charge">
-                          <Trash2Icon className="text-muted-foreground" />
+                        <Button variant="ghost" size="icon-sm" className="ml-1 text-muted-foreground/60 transition-colors hover:bg-destructive/10 hover:text-destructive dark:hover:bg-destructive/20" onClick={() => deleteCharge(f.id)} aria-label="Delete charge">
+                          <TrashIcon />
                         </Button>
                       </TableCell>
                     </TableRow>

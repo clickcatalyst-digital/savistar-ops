@@ -1,7 +1,7 @@
 // Generic file attachments: upload to R2, link to any entity (cash_transaction, order, …).
 import { NextResponse } from 'next/server';
-import { queryAll, queryOne, execute } from '@/lib/db';
-import { uploadToR2, deleteFromR2, isR2Configured } from '@/lib/r2';
+import { queryAll, queryOne, execute, softDelete } from '@/lib/db';
+import { uploadToR2, isR2Configured } from '@/lib/r2';
 import { getUserFromRequest, requireNonStaff } from '@/lib/auth';
 
 // Cash-transaction attachments are financial data — staff can attach files to orders,
@@ -18,7 +18,8 @@ export async function GET(req) {
   const guard = guardCashEntity(getUserFromRequest(req), type);
   if (guard) return guard;
   const rows = await queryAll(
-    'SELECT * FROM attachments WHERE entity_type = ? AND entity_id = ? ORDER BY id DESC', [type, id]);
+    `SELECT * FROM attachments WHERE entity_type = ? AND entity_id = ?
+     AND is_deleted_record = 0 ORDER BY id DESC`, [type, id]);
   return NextResponse.json(rows);
 }
 
@@ -50,11 +51,11 @@ export async function POST(req) {
 export async function DELETE(req) {
   const { searchParams } = new URL(req.url);
   const id = searchParams.get('id');
-  const row = await queryOne('SELECT * FROM attachments WHERE id = ?', [id]);
+  const row = await queryOne('SELECT * FROM attachments WHERE id = ? AND is_deleted_record = 0', [id]);
   if (!row) return NextResponse.json({ error: 'Not found' }, { status: 404 });
   const guard = guardCashEntity(getUserFromRequest(req), row.entity_type);
   if (guard) return guard;
-  try { await deleteFromR2(row.file_url); } catch { /* R2 object may already be gone */ }
-  await execute('DELETE FROM attachments WHERE id = ?', [id]);
+  // File stays in R2 so a restored row still resolves.
+  await softDelete('attachments', id);
   return NextResponse.json({ ok: true });
 }

@@ -4,11 +4,12 @@ import { queryAll, execute } from '@/lib/db';
 export async function GET() {
   const rows = await queryAll(`
     SELECT p.*, c.name AS client_name,
-      (SELECT COUNT(*) FROM milestones m WHERE m.project_id = p.id) AS milestones_total,
-      (SELECT COUNT(*) FROM milestones m WHERE m.project_id = p.id AND m.status = 'done') AS milestones_done,
-      (SELECT COUNT(*) FROM orders o WHERE o.project_id = p.id) AS orders_count
+      (SELECT COUNT(*) FROM milestones m WHERE m.project_id = p.id AND m.is_deleted_record = 0) AS milestones_total,
+      (SELECT COUNT(*) FROM milestones m WHERE m.project_id = p.id AND m.is_deleted_record = 0 AND m.status = 'done') AS milestones_done,
+      (SELECT COUNT(*) FROM orders o WHERE o.project_id = p.id AND o.is_deleted_record = 0) AS orders_count
     FROM projects p
     LEFT JOIN clients c ON c.id = p.client_id
+    WHERE p.is_deleted_record = 0
     ORDER BY p.status = 'active' DESC, p.created_at DESC`);
   return NextResponse.json(rows);
 }

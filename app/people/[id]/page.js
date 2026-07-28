@@ -19,7 +19,8 @@ import {
 import {
   Table, TableHeader, TableRow, TableHead, TableBody, TableCell,
 } from '@/components/ui/table';
-import { ArrowLeftIcon, PencilIcon, PlusIcon, Trash2Icon, StarIcon } from 'lucide-react';
+import { ArrowLeftIcon, PencilIcon, PlusIcon, StarIcon } from 'lucide-react';
+import { TrashIcon } from '@heroicons/react/24/outline';
 
 export default function EmployeeDetail() {
   const { id } = useParams();
@@ -156,7 +157,7 @@ export default function EmployeeDetail() {
               </div>
             )}
             <DialogFooter className="sm:justify-between">
-              <Button variant="ghost" className="text-destructive" onClick={remove}><Trash2Icon data-icon="inline-start" />Delete</Button>
+              <Button variant="ghost" className="text-destructive transition-colors hover:bg-destructive/10 hover:text-destructive dark:hover:bg-destructive/20" onClick={remove}><TrashIcon data-icon="inline-start" />Delete</Button>
               <div className="flex gap-2">
                 <Button variant="outline" onClick={() => setEditOpen(false)}>Cancel</Button>
                 <Button onClick={saveEdit} disabled={busy}>{busy ? 'Saving…' : 'Save'}</Button>
@@ -271,8 +272,8 @@ export default function EmployeeDetail() {
                   <span className="font-medium">₹{x.amount.toLocaleString('en-IN')}</span>
                   <span className="min-w-0 flex-1 truncate text-muted-foreground">{x.description || ''}</span>
                   <span className="text-xs text-muted-foreground">{formatDate(x.date)}</span>
-                  <Button variant="ghost" size="icon-sm" className="opacity-0 group-hover:opacity-100" onClick={() => deleteExpense(x.id)} aria-label="Delete">
-                    <Trash2Icon className="text-muted-foreground" />
+                  <Button variant="ghost" size="icon-sm" className="text-muted-foreground/60 transition-colors hover:bg-destructive/10 hover:text-destructive dark:hover:bg-destructive/20" onClick={() => deleteExpense(x.id)} aria-label="Delete">
+                    <TrashIcon />
                   </Button>
                 </div>
               ))}

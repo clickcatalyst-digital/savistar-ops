@@ -16,7 +16,8 @@ import {
 import {
   Table, TableHeader, TableRow, TableHead, TableBody, TableCell,
 } from '@/components/ui/table';
-import { PlusIcon, KeyRoundIcon, Trash2Icon } from 'lucide-react';
+import { PlusIcon, KeyRoundIcon } from 'lucide-react';
+import { TrashIcon } from '@heroicons/react/24/outline';
 
 const EMPTY = { username: '', password: '', display_name: '', role: 'user' };
 
@@ -181,8 +182,8 @@ export default function SettingsPage() {
                   </TableCell>
                   <TableCell className="whitespace-nowrap text-right">
                     <Button variant="ghost" size="icon-sm" onClick={() => setPwFor(u)} aria-label="Change password"><KeyRoundIcon /></Button>
-                    <Button variant="ghost" size="icon-sm" className="opacity-0 group-hover:opacity-100" onClick={() => remove(u)} aria-label="Delete user">
-                      <Trash2Icon className="text-destructive" />
+                    <Button variant="ghost" size="icon-sm" className="text-muted-foreground/60 transition-colors hover:bg-destructive/10 hover:text-destructive dark:hover:bg-destructive/20" onClick={() => remove(u)} aria-label="Delete user">
+                      <TrashIcon />
                     </Button>
                   </TableCell>
                 </TableRow>

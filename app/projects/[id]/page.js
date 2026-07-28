@@ -19,7 +19,8 @@ import {
 import {
   Select, SelectTrigger, SelectValue, SelectContent, SelectGroup, SelectItem,
 } from '@/components/ui/select';
-import { ArrowLeftIcon, PlusIcon, PencilIcon, Trash2Icon, MapPinIcon, SendIcon } from 'lucide-react';
+import { ArrowLeftIcon, PlusIcon, PencilIcon, MapPinIcon, SendIcon } from 'lucide-react';
+import { TrashIcon } from '@heroicons/react/24/outline';
 
 export default function ProjectDetail() {
   const { id } = useParams();
@@ -152,7 +153,7 @@ export default function ProjectDetail() {
               </div>
             )}
             <DialogFooter className="sm:justify-between">
-              <Button variant="ghost" className="text-destructive" onClick={remove}><Trash2Icon data-icon="inline-start" />Delete</Button>
+              <Button variant="ghost" className="text-destructive transition-colors hover:bg-destructive/10 hover:text-destructive dark:hover:bg-destructive/20" onClick={remove}><TrashIcon data-icon="inline-start" />Delete</Button>
               <div className="flex gap-2">
                 <Button variant="outline" onClick={() => setEditOpen(false)}>Cancel</Button>
                 <Button onClick={saveEdit} disabled={busy}>{busy ? 'Saving…' : 'Save'}</Button>
@@ -195,8 +196,8 @@ export default function ProjectDetail() {
                           {formatDate(m.due_date)}
                         </span>
                       )}
-                      <Button variant="ghost" size="icon-sm" className="opacity-0 group-hover:opacity-100" onClick={() => deleteMilestone(m.id)} aria-label="Delete milestone">
-                        <Trash2Icon className="text-muted-foreground" />
+                      <Button variant="ghost" size="icon-sm" className="text-muted-foreground/60 transition-colors hover:bg-destructive/10 hover:text-destructive dark:hover:bg-destructive/20" onClick={() => deleteMilestone(m.id)} aria-label="Delete milestone">
+                        <TrashIcon />
                       </Button>
                     </div>
                   );

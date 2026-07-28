@@ -14,7 +14,7 @@ export async function POST(req, { params }) {
   const totals = await queryOne(
     `SELECT vp.qty_ordered,
        COALESCE(SUM(d.qty_delivered), 0) AS delivered, COALESCE(SUM(d.qty_returned), 0) AS returned
-     FROM vendor_pos vp LEFT JOIN vendor_deliveries d ON d.vendor_po_id = vp.id
+     FROM vendor_pos vp LEFT JOIN vendor_deliveries d ON d.vendor_po_id = vp.id AND d.is_deleted_record = 0
      WHERE vp.id = ? GROUP BY vp.id`, [params.id]);
   const outstanding = totals.qty_ordered - totals.delivered + totals.returned;
   await execute('UPDATE vendor_pos SET status = ? WHERE id = ? AND status != ?',

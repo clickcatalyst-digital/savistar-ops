@@ -16,7 +16,8 @@ import {
 import {
   Select, SelectTrigger, SelectValue, SelectContent, SelectGroup, SelectItem,
 } from '@/components/ui/select';
-import { ArrowLeftIcon, PencilIcon, SendIcon, Trash2Icon } from 'lucide-react';
+import { ArrowLeftIcon, PencilIcon, SendIcon } from 'lucide-react';
+import { TrashIcon } from '@heroicons/react/24/outline';
 
 export default function ClientDetail() {
   const { id } = useParams();
@@ -110,7 +111,7 @@ export default function ClientDetail() {
               </div>
             )}
             <DialogFooter className="sm:justify-between">
-              <Button variant="ghost" className="text-destructive" onClick={remove}><Trash2Icon data-icon="inline-start" />Delete</Button>
+              <Button variant="ghost" className="text-destructive transition-colors hover:bg-destructive/10 hover:text-destructive dark:hover:bg-destructive/20" onClick={remove}><TrashIcon data-icon="inline-start" />Delete</Button>
               <div className="flex gap-2">
                 <Button variant="outline" onClick={() => setEditOpen(false)}>Cancel</Button>
                 <Button onClick={saveEdit} disabled={busy}>{busy ? 'Saving…' : 'Save'}</Button>

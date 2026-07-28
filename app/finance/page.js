@@ -19,9 +19,10 @@ import {
   Table, TableHeader, TableRow, TableHead, TableBody, TableCell,
 } from '@/components/ui/table';
 import {
-  PlusIcon, PencilIcon, Trash2Icon, PaperclipIcon, UploadIcon, ArrowLeftIcon,
+  PlusIcon, PencilIcon, PaperclipIcon, UploadIcon, ArrowLeftIcon,
   Loader2Icon, FileTextIcon, ExternalLinkIcon,
 } from 'lucide-react';
+import { TrashIcon } from '@heroicons/react/24/outline';
 
 export default function FinancePage() {
   return (
@@ -198,8 +199,8 @@ function CashTab() {
                     aria-label="Edit">
                     <PencilIcon />
                   </Button>
-                  <Button variant="ghost" size="icon-sm" className="opacity-0 group-hover:opacity-100" onClick={() => remove(t)} aria-label="Delete">
-                    <Trash2Icon className="text-destructive" />
+                  <Button variant="ghost" size="icon-sm" className="text-muted-foreground/60 transition-colors hover:bg-destructive/10 hover:text-destructive dark:hover:bg-destructive/20" onClick={() => remove(t)} aria-label="Delete">
+                    <TrashIcon />
                   </Button>
                 </TableCell>
               </TableRow>
@@ -265,8 +266,8 @@ function AttachmentsDialog({ entity, onClose }) {
             <div key={f.id} className="group flex items-center gap-2 rounded-md border px-3 py-2 text-sm">
               <FileTextIcon className="size-4 shrink-0 text-muted-foreground" />
               <a href={f.file_url} target="_blank" rel="noreferrer" className="min-w-0 flex-1 truncate text-primary hover:underline">{f.name || f.file_url}</a>
-              <Button variant="ghost" size="icon-sm" className="opacity-0 group-hover:opacity-100" onClick={() => remove(f.id)} aria-label="Delete file">
-                <Trash2Icon className="text-muted-foreground" />
+              <Button variant="ghost" size="icon-sm" className="text-muted-foreground/60 transition-colors hover:bg-destructive/10 hover:text-destructive dark:hover:bg-destructive/20" onClick={() => remove(f.id)} aria-label="Delete file">
+                <TrashIcon />
               </Button>
             </div>
           ))}
@@ -400,8 +401,8 @@ function BankTab() {
                       <a href={d.file_url} target="_blank" rel="noreferrer"><ExternalLinkIcon /></a>
                     </Button>
                   )}
-                  <Button variant="ghost" size="icon-sm" className="opacity-0 group-hover:opacity-100" onClick={() => remove(d)} aria-label="Delete">
-                    <Trash2Icon className="text-destructive" />
+                  <Button variant="ghost" size="icon-sm" className="text-muted-foreground/60 transition-colors hover:bg-destructive/10 hover:text-destructive dark:hover:bg-destructive/20" onClick={() => remove(d)} aria-label="Delete">
+                    <TrashIcon />
                   </Button>
                 </TableCell>
               </TableRow>

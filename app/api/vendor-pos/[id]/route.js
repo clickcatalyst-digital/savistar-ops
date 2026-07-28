@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { execute } from '@/lib/db';
+import { execute, softDelete } from '@/lib/db';
 
 export async function PUT(req, { params }) {
   const b = await req.json();
@@ -9,6 +9,6 @@ export async function PUT(req, { params }) {
 }
 
 export async function DELETE(req, { params }) {
-  await execute('DELETE FROM vendor_pos WHERE id = ?', [params.id]);
+  await softDelete('vendor_pos', params.id);
   return NextResponse.json({ ok: true });
 }

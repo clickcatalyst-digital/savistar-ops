@@ -8,7 +8,8 @@ export async function POST(req) {
   }
   await execute(
     `INSERT INTO vendor_rates (vendor_id, from_loc, to_loc, expected_amount) VALUES (?, ?, ?, ?)
-     ON CONFLICT(vendor_id, from_loc, to_loc) DO UPDATE SET expected_amount = excluded.expected_amount`,
+     ON CONFLICT(vendor_id, from_loc, to_loc) DO UPDATE SET expected_amount = excluded.expected_amount,
+       is_deleted_record = 0`,
     [b.vendor_id, b.from_loc.trim(), b.to_loc.trim(), b.expected_amount]);
   return NextResponse.json({ ok: true });
 }

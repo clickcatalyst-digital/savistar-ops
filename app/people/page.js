@@ -19,7 +19,8 @@ import {
 import {
   Table, TableHeader, TableRow, TableHead, TableBody, TableCell,
 } from '@/components/ui/table';
-import { PlusIcon, Trash2Icon, CheckIcon } from 'lucide-react';
+import { PlusIcon, CheckIcon } from 'lucide-react';
+import { TrashIcon } from '@heroicons/react/24/outline';
 
 export default function PeoplePage() {
   return (
@@ -163,8 +164,8 @@ function WorksheetRow({ row, date, orders, onSaved }) {
                 </span>
                 <span className="min-w-0 flex-1 truncate text-muted-foreground">{w.description || '—'}</span>
                 {w.rating && <span className="text-xs">★ {w.rating}</span>}
-                <Button variant="ghost" size="icon-sm" className="opacity-0 group-hover:opacity-100" onClick={() => deleteLog(w.id)} aria-label="Delete log">
-                  <Trash2Icon className="text-muted-foreground" />
+                <Button variant="ghost" size="icon-sm" className="text-muted-foreground/60 transition-colors hover:bg-destructive/10 hover:text-destructive dark:hover:bg-destructive/20" onClick={() => deleteLog(w.id)} aria-label="Delete log">
+                  <TrashIcon />
                 </Button>
               </div>
             ))}

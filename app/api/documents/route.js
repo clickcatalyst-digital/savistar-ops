@@ -10,12 +10,12 @@ export async function GET(req) {
   if (guard) return guard;
   // Stale 'reading' rows (server restarted mid-extraction) get failed after 5 min.
   await execute(`UPDATE documents SET status = 'extract_failed', extract_error = 'Timeout'
-    WHERE status = 'reading' AND created_at < datetime('now', '-5 minutes')`);
+    WHERE status = 'reading' AND created_at < datetime('now', '-5 minutes') AND is_deleted_record = 0`);
   const rows = await queryAll(
     `SELECT id, doc_type, original_filename, file_url, status, bank_name, account_no,
        statement_from, statement_to, opening_balance, closing_balance, total_debit, total_credit,
        extract_error, uploaded_by, created_at
-     FROM documents ORDER BY created_at DESC`);
+     FROM documents WHERE is_deleted_record = 0 ORDER BY created_at DESC`);
   return NextResponse.json(rows);
 }
 

@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server';
-import { execute } from '@/lib/db';
+import { execute, softDelete } from '@/lib/db';
 import { getDocument } from '@/lib/extract';
-import { deleteFromR2 } from '@/lib/r2';
 import { getUserFromRequest, requireApprover, requireNonStaff } from '@/lib/auth';
 
 export async function GET(req, { params }) {
@@ -37,7 +36,8 @@ export async function DELETE(req, { params }) {
   if (guard) return guard;
   const doc = await getDocument(params.id);
   if (!doc) return NextResponse.json({ error: 'Not found' }, { status: 404 });
-  if (doc.file_url) { try { await deleteFromR2(doc.file_url); } catch { /* already gone */ } }
-  await execute('DELETE FROM documents WHERE id = ?', [params.id]);
+  // The PDF deliberately stays in R2 — a hidden row pointing at a live file is recoverable,
+  // a restored row pointing at a deleted file is not.
+  await softDelete('documents', params.id);
   return NextResponse.json({ ok: true });
 }

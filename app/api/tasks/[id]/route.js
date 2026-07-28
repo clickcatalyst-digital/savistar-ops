@@ -1,11 +1,11 @@
 import { NextResponse } from 'next/server';
-import { queryOne, execute } from '@/lib/db';
+import { queryOne, execute, softDelete } from '@/lib/db';
 import { getUserFromRequest, isStaff } from '@/lib/auth';
 
 export async function PUT(req, { params }) {
   const user = getUserFromRequest(req);
   if (isStaff(user)) {
-    const task = await queryOne('SELECT assigned_to FROM tasks WHERE id = ?', [params.id]);
+    const task = await queryOne('SELECT assigned_to FROM tasks WHERE id = ? AND is_deleted_record = 0', [params.id]);
     if (!task) return NextResponse.json({ error: 'Not found' }, { status: 404 });
     if (task.assigned_to !== user.username) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
@@ -28,10 +28,10 @@ export async function PUT(req, { params }) {
 export async function DELETE(req, { params }) {
   const user = getUserFromRequest(req);
   if (isStaff(user)) {
-    const task = await queryOne('SELECT assigned_to FROM tasks WHERE id = ?', [params.id]);
+    const task = await queryOne('SELECT assigned_to FROM tasks WHERE id = ? AND is_deleted_record = 0', [params.id]);
     if (!task) return NextResponse.json({ error: 'Not found' }, { status: 404 });
     if (task.assigned_to !== user.username) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
-  await execute('DELETE FROM tasks WHERE id = ?', [params.id]);
+  await softDelete('tasks', params.id);
   return NextResponse.json({ ok: true });
 }

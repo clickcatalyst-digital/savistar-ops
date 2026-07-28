@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { execute } from '@/lib/db';
+import { execute, softDelete } from '@/lib/db';
 import { getUserFromRequest, requireApprover, requireNonStaff } from '@/lib/auth';
 
 export async function PUT(req, { params }) {
@@ -15,7 +15,6 @@ export async function PUT(req, { params }) {
 export async function DELETE(req, { params }) {
   const guard = requireApprover(getUserFromRequest(req));
   if (guard) return guard;
-  await execute('DELETE FROM cash_transactions WHERE id = ?', [params.id]);
-  await execute("DELETE FROM attachments WHERE entity_type = 'cash_transaction' AND entity_id = ?", [params.id]);
+  await softDelete('cash_transactions', params.id); // also hides its attachment rows
   return NextResponse.json({ ok: true });
 }

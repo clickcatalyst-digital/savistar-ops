@@ -19,7 +19,8 @@ import {
 import {
   Table, TableHeader, TableRow, TableHead, TableBody, TableCell,
 } from '@/components/ui/table';
-import { ArrowLeftIcon, PencilIcon, Trash2Icon, StarIcon } from 'lucide-react';
+import { ArrowLeftIcon, PencilIcon, StarIcon } from 'lucide-react';
+import { TrashIcon } from '@heroicons/react/24/outline';
 
 const STATUSES = ['pending', 'in_progress', 'done', 'delivered', 'cancelled'];
 
@@ -127,7 +128,7 @@ export default function OrderDetail() {
               </div>
             )}
             <DialogFooter className="sm:justify-between">
-              <Button variant="ghost" className="text-destructive" onClick={remove}><Trash2Icon data-icon="inline-start" />Delete</Button>
+              <Button variant="ghost" className="text-destructive transition-colors hover:bg-destructive/10 hover:text-destructive dark:hover:bg-destructive/20" onClick={remove}><TrashIcon data-icon="inline-start" />Delete</Button>
               <div className="flex gap-2">
                 <Button variant="outline" onClick={() => setEditOpen(false)}>Cancel</Button>
                 <Button onClick={saveEdit} disabled={busy}>{busy ? 'Saving…' : 'Save'}</Button>

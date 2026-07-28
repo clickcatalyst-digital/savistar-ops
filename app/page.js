@@ -16,6 +16,7 @@ import {
 import {
   Select, SelectTrigger, SelectValue, SelectContent, SelectGroup, SelectItem,
 } from '@/components/ui/select';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ChevronLeftIcon, ChevronRightIcon, PlusIcon, FolderKanbanIcon, MapPinIcon, ArmchairIcon } from 'lucide-react';
 
 const fmtISO = toISODate;
@@ -28,6 +29,9 @@ export default function Dashboard() {
   const [dayOpen, setDayOpen] = useState(null); // ISO date whose details are open
   const [me, setMe] = useState(null);
   const [assignableUsers, setAssignableUsers] = useState([]);
+  // 'mine' | 'all' — owners/admins default to their own plate. Staff are server-side
+  // restricted to their own tasks either way, so they never see the switch.
+  const [taskScope, setTaskScope] = useState('mine');
   const canAssign = me && me.role !== 'user';
 
   useEffect(() => {
@@ -51,12 +55,12 @@ export default function Dashboard() {
   const loadCalendar = useCallback(async () => {
     const from = fmtISO(gridDays[0]);
     const to = fmtISO(gridDays[41]);
-    setEvents(await api(`/api/calendar?from=${from}&to=${to}`));
-  }, [gridDays]);
+    setEvents(await api(`/api/calendar?from=${from}&to=${to}&who=${taskScope}`));
+  }, [gridDays, taskScope]);
 
   const loadToday = useCallback(async () => {
-    setTodayTasks(await api('/api/tasks?scope=today'));
-  }, []);
+    setTodayTasks(await api(`/api/tasks?scope=today&who=${taskScope}`));
+  }, [taskScope]);
 
   useEffect(() => { loadCalendar(); }, [loadCalendar]);
   useEffect(() => { loadToday(); }, [loadToday]);
@@ -151,7 +155,17 @@ export default function Dashboard() {
 
         {/* Today & overdue */}
         <Card>
-          <CardHeader><CardTitle>Today & overdue</CardTitle></CardHeader>
+          <CardHeader className="flex-row items-center justify-between gap-3">
+            <CardTitle>Today & overdue</CardTitle>
+            {canAssign && (
+              <Tabs value={taskScope} onValueChange={setTaskScope}>
+                <TabsList>
+                  <TabsTrigger value="mine">Mine</TabsTrigger>
+                  <TabsTrigger value="all">All</TabsTrigger>
+                </TabsList>
+              </Tabs>
+            )}
+          </CardHeader>
           <CardContent className="flex flex-col gap-3">
             <div className="flex flex-wrap gap-2">
               <Input placeholder="New task…" value={newTask.title} onChange={e => setNewTask({ ...newTask, title: e.target.value })}
@@ -159,7 +173,9 @@ export default function Dashboard() {
               <Input type="date" value={newTask.due_date} onChange={e => setNewTask({ ...newTask, due_date: e.target.value })} className="w-36 shrink-0" />
               {canAssign && (
                 <Select value={newTask.assigned_to} onValueChange={v => setNewTask({ ...newTask, assigned_to: v })}>
-                  <SelectTrigger className="w-36 shrink-0"><SelectValue placeholder="Assign to me" /></SelectTrigger>
+                  <SelectTrigger className="w-36 shrink-0" aria-label="Assign new task to">
+                    <SelectValue placeholder="Assign to…" />
+                  </SelectTrigger>
                   <SelectContent>
                     <SelectGroup>
                       {assignableUsers.map(u => (
@@ -172,7 +188,11 @@ export default function Dashboard() {
               <Button size="icon" onClick={addTask} disabled={!newTask.title.trim()} aria-label="Add task"><PlusIcon /></Button>
             </div>
             <div className="flex flex-col gap-1">
-              {todayTasks.length === 0 && <p className="py-4 text-center text-sm text-muted-foreground">All clear — nothing due.</p>}
+              {todayTasks.length === 0 && (
+                <p className="py-4 text-center text-sm text-muted-foreground">
+                  {taskScope === 'mine' && canAssign ? 'Nothing on your plate — check All.' : 'All clear — nothing due.'}
+                </p>
+              )}
               {todayTasks.map(t => {
                 const overdue = t.due_date < todayISO;
                 return (

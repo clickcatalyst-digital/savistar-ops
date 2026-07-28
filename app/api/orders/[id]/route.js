@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { queryAll, queryOne, execute } from '@/lib/db';
+import { queryAll, queryOne, execute, softDelete } from '@/lib/db';
 import { getUserFromRequest, requireApprover } from '@/lib/auth';
 
 export async function GET(req, { params }) {
@@ -7,17 +7,18 @@ export async function GET(req, { params }) {
     SELECT o.*, c.name AS client_name, p.name AS project_name FROM orders o
     LEFT JOIN clients c ON c.id = o.client_id
     LEFT JOIN projects p ON p.id = o.project_id
-    WHERE o.id = ?`, [params.id]);
+    WHERE o.id = ? AND o.is_deleted_record = 0`, [params.id]);
   if (!order) return NextResponse.json({ error: 'Not found' }, { status: 404 });
   const [workLogs, vendorPos] = await Promise.all([
     queryAll(`SELECT w.*, e.name AS employee_name, e.profession FROM work_logs w
               JOIN employees e ON e.id = w.employee_id
-              WHERE w.order_id = ? ORDER BY w.date DESC, w.id DESC`, [params.id]),
+              WHERE w.order_id = ? AND w.is_deleted_record = 0 AND e.is_deleted_record = 0
+              ORDER BY w.date DESC, w.id DESC`, [params.id]),
     queryAll(`SELECT vp.*, v.name AS vendor_name,
-        COALESCE((SELECT SUM(qty_delivered) FROM vendor_deliveries d WHERE d.vendor_po_id = vp.id), 0) AS delivered,
-        COALESCE((SELECT SUM(qty_returned) FROM vendor_deliveries d WHERE d.vendor_po_id = vp.id), 0) AS returned
+        COALESCE((SELECT SUM(qty_delivered) FROM vendor_deliveries d WHERE d.vendor_po_id = vp.id AND d.is_deleted_record = 0), 0) AS delivered,
+        COALESCE((SELECT SUM(qty_returned) FROM vendor_deliveries d WHERE d.vendor_po_id = vp.id AND d.is_deleted_record = 0), 0) AS returned
       FROM vendor_pos vp JOIN vendors v ON v.id = vp.vendor_id
-      WHERE vp.order_id = ? ORDER BY vp.created_at DESC`, [params.id]),
+      WHERE vp.order_id = ? AND vp.is_deleted_record = 0 ORDER BY vp.created_at DESC`, [params.id]),
   ]);
   return NextResponse.json({ ...order, workLogs, vendorPos });
 }
@@ -37,6 +38,6 @@ export async function PUT(req, { params }) {
 export async function DELETE(req, { params }) {
   const guard = requireApprover(getUserFromRequest(req));
   if (guard) return guard;
-  await execute('DELETE FROM orders WHERE id = ?', [params.id]);
+  await softDelete('orders', params.id);
   return NextResponse.json({ ok: true });
 }
