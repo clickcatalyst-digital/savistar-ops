@@ -5,6 +5,7 @@ import { api, showToast, formatDate, formatMoney, capitalize } from '@/lib/clien
 import { todayISO } from '@/lib/date';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { DateInput } from '@/components/ui/date-input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
@@ -25,20 +26,33 @@ import {
 import { TrashIcon } from '@heroicons/react/24/outline';
 
 export default function FinancePage() {
+  const [me, setMe] = useState(null);
+  useEffect(() => { api('/api/me').then(setMe).catch(() => {}); }, []);
+
+  if (!me) return null;
+
+  // Staff get a cash-only view scoped to entries they created themselves — no Bank tab,
+  // no company-wide totals. Owners/admins/managers keep the full book, same as before.
+  const staff = me.role === 'user';
+
   return (
     <div className="container flex flex-col gap-4 py-6">
       <div>
         <h1 className="text-2xl font-bold tracking-tight">Finance</h1>
-        <p className="text-sm text-muted-foreground">One combined book — Savistar & Saag</p>
+        <p className="text-sm text-muted-foreground">
+          {staff ? 'Cash entries you\'ve added' : 'One combined book — Savistar & Saag'}
+        </p>
       </div>
-      <Tabs defaultValue="cash">
-        <TabsList>
-          <TabsTrigger value="cash">Cash</TabsTrigger>
-          <TabsTrigger value="bank">Bank</TabsTrigger>
-        </TabsList>
-        <TabsContent value="cash" className="mt-4"><CashTab /></TabsContent>
-        <TabsContent value="bank" className="mt-4"><BankTab /></TabsContent>
-      </Tabs>
+      {staff ? <CashTab scoped /> : (
+        <Tabs defaultValue="cash">
+          <TabsList>
+            <TabsTrigger value="cash">Cash</TabsTrigger>
+            <TabsTrigger value="bank">Bank</TabsTrigger>
+          </TabsList>
+          <TabsContent value="cash" className="mt-4"><CashTab /></TabsContent>
+          <TabsContent value="bank" className="mt-4"><BankTab /></TabsContent>
+        </Tabs>
+      )}
     </div>
   );
 }
@@ -47,7 +61,35 @@ export default function FinancePage() {
 
 const EMPTY_TXN = { date: todayISO(), kind: 'debit', amount: '', party: '', description: '' };
 
-function CashTab() {
+// Cash "Party" typeahead over vendors + clients — falls back to free text for anything else
+// (staff reimbursements, misc). Suffix only shown when a name collides across both lists.
+function partyCollisions(vendors, clients) {
+  const vendorNames = new Set(vendors.map(v => v.name));
+  return new Set(clients.filter(c => vendorNames.has(c.name)).map(c => c.name));
+}
+
+function resolveParty(text, vendors, clients) {
+  const clean = (text || '').trim();
+  const suffix = clean.match(/ — (Vendor|Client)$/)?.[1];
+  const stripped = clean.replace(/ — (Vendor|Client)$/, '');
+  if (suffix !== 'Client') {
+    const v = vendors.find(x => x.name === stripped);
+    if (v) return { party: v.name, party_type: 'vendor', party_id: v.id };
+  }
+  if (suffix !== 'Vendor') {
+    const c = clients.find(x => x.name === stripped);
+    if (c) return { party: c.name, party_type: 'client', party_id: c.id };
+  }
+  return { party: clean, party_type: null, party_id: null };
+}
+
+function displayParty(t, vendors, clients) {
+  if (!t.party_type || !t.party) return t.party || '';
+  const collides = partyCollisions(vendors, clients).has(t.party);
+  return collides ? `${t.party} — ${capitalize(t.party_type)}` : t.party;
+}
+
+function CashTab({ scoped = false }) {
   const [data, setData] = useState(null);
   const [month, setMonth] = useState('');
   const [open, setOpen] = useState(false);
@@ -55,16 +97,28 @@ function CashTab() {
   const [editing, setEditing] = useState(null); // txn id being edited
   const [attachFor, setAttachFor] = useState(null); // txn to manage attachments for
   const [busy, setBusy] = useState(false);
+  const [vendors, setVendors] = useState([]);
+  const [clients, setClients] = useState([]);
 
   const load = useCallback(async () => {
     setData(await api(`/api/cash${month ? `?month=${month}` : ''}`));
   }, [month]);
   useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    api('/api/vendors').then(setVendors).catch(() => {});
+    api('/api/clients').then(setClients).catch(() => {});
+  }, []);
+
+  const collisions = partyCollisions(vendors, clients);
+  const partySuggestions = [
+    ...vendors.map(v => collisions.has(v.name) ? `${v.name} — Vendor` : v.name),
+    ...clients.map(c => collisions.has(c.name) ? `${c.name} — Client` : c.name),
+  ];
 
   async function save() {
     setBusy(true);
     try {
-      const body = { ...form, amount: Number(form.amount) };
+      const body = { ...form, amount: Number(form.amount), ...resolveParty(form.party, vendors, clients) };
       if (editing) {
         await api(`/api/cash/${editing}`, { method: 'PUT', body });
         showToast('Transaction updated');
@@ -97,15 +151,15 @@ function CashTab() {
     <div className="flex flex-col gap-4">
       <div className="grid gap-3 sm:grid-cols-3">
         <Card>
-          <CardHeader className="pb-2"><CardDescription>Cash balance (all time)</CardDescription></CardHeader>
+          <CardHeader className="pb-2"><CardDescription>{scoped ? 'Your balance (all time)' : 'Cash balance (all time)'}</CardDescription></CardHeader>
           <CardContent><p className={`text-2xl font-bold ${data.balance < 0 ? 'text-destructive' : ''}`}>{formatMoney(Math.abs(data.balance)) || '₹0'}{data.balance < 0 ? ' (short)' : ''}</p></CardContent>
         </Card>
         <Card>
-          <CardHeader className="pb-2"><CardDescription>Credits {month ? `in ${month}` : '(shown)'}</CardDescription></CardHeader>
+          <CardHeader className="pb-2"><CardDescription>{scoped ? 'Your credits' : 'Credits'} {month ? `in ${month}` : '(shown)'}</CardDescription></CardHeader>
           <CardContent><p className="text-2xl font-bold">{formatMoney(monthCredit) || '₹0'}</p></CardContent>
         </Card>
         <Card>
-          <CardHeader className="pb-2"><CardDescription>Debits {month ? `in ${month}` : '(shown)'}</CardDescription></CardHeader>
+          <CardHeader className="pb-2"><CardDescription>{scoped ? 'Your debits' : 'Debits'} {month ? `in ${month}` : '(shown)'}</CardDescription></CardHeader>
           <CardContent><p className="text-2xl font-bold">{formatMoney(monthDebit) || '₹0'}</p></CardContent>
         </Card>
       </div>
@@ -123,7 +177,7 @@ function CashTab() {
               <div className="grid grid-cols-3 gap-3">
                 <div className="flex flex-col gap-2">
                   <Label>Date</Label>
-                  <Input type="date" value={form.date} onChange={e => setForm({ ...form, date: e.target.value })} />
+                  <DateInput value={form.date} onChange={v => setForm({ ...form, date: v })} />
                 </div>
                 <div className="flex flex-col gap-2">
                   <Label>Type</Label>
@@ -144,7 +198,10 @@ function CashTab() {
               </div>
               <div className="flex flex-col gap-2">
                 <Label>Party</Label>
-                <Input placeholder="Who paid / was paid" value={form.party} onChange={e => setForm({ ...form, party: e.target.value })} />
+                <Input list="party-suggestions" placeholder="Who paid / was paid" value={form.party} onChange={e => setForm({ ...form, party: e.target.value })} />
+                <datalist id="party-suggestions">
+                  {partySuggestions.map(p => <option key={p} value={p} />)}
+                </datalist>
               </div>
               <div className="flex flex-col gap-2">
                 <Label>Description</Label>
@@ -195,7 +252,7 @@ function CashTab() {
                 </TableCell>
                 <TableCell className="whitespace-nowrap text-right">
                   <Button variant="ghost" size="icon-sm" className="opacity-0 group-hover:opacity-100"
-                    onClick={() => { setEditing(t.id); setForm({ date: t.date, kind: t.kind, amount: t.amount, party: t.party || '', description: t.description || '' }); setOpen(true); }}
+                    onClick={() => { setEditing(t.id); setForm({ date: t.date, kind: t.kind, amount: t.amount, party: displayParty(t, vendors, clients), description: t.description || '' }); setOpen(true); }}
                     aria-label="Edit">
                     <PencilIcon />
                   </Button>

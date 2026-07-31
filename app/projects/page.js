@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { api, showToast, formatDate, capitalize } from '@/lib/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { DateInput } from '@/components/ui/date-input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
@@ -75,7 +76,7 @@ export default function ProjectsPage() {
               </div>
               <div className="flex flex-col gap-2">
                 <Label>Start date</Label>
-                <Input type="date" value={form.start_date} onChange={e => setForm({ ...form, start_date: e.target.value })} />
+                <DateInput value={form.start_date} onChange={v => setForm({ ...form, start_date: v })} />
               </div>
             </div>
             <DialogFooter>

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { api, showToast } from '@/lib/client';
+import { api, showToast, formatMoney } from '@/lib/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -87,11 +87,12 @@ export default function VendorsPage() {
               <TableHead>Phone</TableHead>
               <TableHead className="text-center">Open POs</TableHead>
               <TableHead className="text-center">Freight overcharges</TableHead>
+              <TableHead className="text-right">Total expense</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {vendors.length === 0 && (
-              <TableRow><TableCell colSpan={5} className="py-8 text-center text-muted-foreground">No vendors yet.</TableCell></TableRow>
+              <TableRow><TableCell colSpan={6} className="py-8 text-center text-muted-foreground">No vendors yet.</TableCell></TableRow>
             )}
             {vendors.map(v => (
               <TableRow key={v.id}>
@@ -106,6 +107,7 @@ export default function VendorsPage() {
                     <Badge variant="destructive"><AlertTriangleIcon data-icon="inline-start" />{v.overcharges}</Badge>
                   ) : '—'}
                 </TableCell>
+                <TableCell className="text-right font-medium">{formatMoney(v.total_expense) || '—'}</TableCell>
               </TableRow>
             ))}
           </TableBody>

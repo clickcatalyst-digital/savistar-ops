@@ -3,10 +3,12 @@
 import { useEffect, useState, useCallback } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
-import { api, showToast, formatDate, capitalize } from '@/lib/client';
+import { api, showToast, formatDate, formatMoney } from '@/lib/client';
 import { todayISO } from '@/lib/date';
+import { poDisplayStatus, PO_STATUS_LABELS } from '@/lib/po';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { DateInput } from '@/components/ui/date-input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
@@ -23,6 +25,9 @@ import {
 } from '@/components/ui/table';
 import { ArrowLeftIcon, PlusIcon, PencilIcon, AlertTriangleIcon, PackageCheckIcon } from 'lucide-react';
 import { TrashIcon } from '@heroicons/react/24/outline';
+
+const BLUE_ICON_BTN = 'text-blue-600 transition-colors hover:bg-blue-50 hover:text-blue-700 dark:text-blue-400 dark:hover:bg-blue-950/40';
+const RED_ICON_BTN = 'text-red-600 transition-colors hover:bg-red-50 hover:text-red-700 dark:text-red-400 dark:hover:bg-red-950/40';
 
 export default function VendorDetail() {
   const { id } = useParams();
@@ -64,7 +69,10 @@ export default function VendorDetail() {
       <div className="flex items-center gap-3">
         <Button asChild variant="ghost" size="icon-sm"><Link href="/vendors"><ArrowLeftIcon /></Link></Button>
         <div className="min-w-0 flex-1">
-          <h1 className="truncate text-2xl font-bold tracking-tight">{v.name}</h1>
+          <div className="flex flex-wrap items-baseline gap-2">
+            <h1 className="truncate text-2xl font-bold tracking-tight">{v.name}</h1>
+            <span className="text-lg font-semibold text-muted-foreground">{formatMoney(v.total_expense) || '₹0'}</span>
+          </div>
           <p className="text-sm text-muted-foreground">
             {[v.material, v.phone].filter(Boolean).join(' · ') || 'No details'}
           </p>
@@ -131,6 +139,8 @@ function PosTab({ vendorId, pos, onChanged }) {
   const [projects, setProjects] = useState([]);
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState({ item: '', qty_ordered: '', rate: '', order_id: '', project_id: '', ordered_on: todayISO(), notes: '' });
+  const [editingPo, setEditingPo] = useState(null); // the PO row being edited
+  const [editForm, setEditForm] = useState(null);
   const [delivery, setDelivery] = useState(null); // { poId, date, qty_delivered, qty_returned, notes }
   const [busy, setBusy] = useState(false);
 
@@ -181,8 +191,40 @@ function PosTab({ vendorId, pos, onChanged }) {
 
   async function cancelPo(po) {
     if (!confirm(`Cancel PO for ${po.item}?`)) return;
-    await api(`/api/vendor-pos/${po.id}`, { method: 'PUT', body: { status: 'cancelled' } });
+    await api(`/api/vendor-pos/${po.id}`, { method: 'PUT', body: { ...po, status: 'cancelled' } });
     onChanged();
+  }
+
+  async function saveEditPo() {
+    setBusy(true);
+    try {
+      await api(`/api/vendor-pos/${editingPo.id}`, {
+        method: 'PUT',
+        body: {
+          ...editingPo,
+          item: editForm.item,
+          qty_ordered: Number(editForm.qty_ordered),
+          rate: editForm.rate ? Number(editForm.rate) : null,
+          order_id: editForm.order_id ? Number(editForm.order_id) : null,
+          project_id: editForm.project_id ? Number(editForm.project_id) : null,
+          ordered_on: editForm.ordered_on,
+          notes: editForm.notes,
+        },
+      });
+      showToast('PO updated');
+      setEditingPo(null);
+      onChanged();
+    } catch (e) { showToast(e.message, 'error'); }
+    setBusy(false);
+  }
+
+  async function deletePo(po) {
+    if (!confirm(`Delete PO for ${po.item}? This can't be undone from here.`)) return;
+    try {
+      await api(`/api/vendor-pos/${po.id}`, { method: 'DELETE' });
+      showToast('PO deleted');
+      onChanged();
+    } catch (e) { showToast(e.message, 'error'); }
   }
 
   return (
@@ -210,7 +252,7 @@ function PosTab({ vendorId, pos, onChanged }) {
                 </div>
                 <div className="flex flex-col gap-2">
                   <Label>Ordered on</Label>
-                  <Input type="date" value={form.ordered_on} onChange={e => setForm({ ...form, ordered_on: e.target.value })} />
+                  <DateInput value={form.ordered_on} onChange={v => setForm({ ...form, ordered_on: v })} />
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-3">
@@ -226,7 +268,7 @@ function PosTab({ vendorId, pos, onChanged }) {
                   </Select>
                 </div>
                 <div className="flex flex-col gap-2">
-                  <Label>For Savistar project</Label>
+                  <Label>Site</Label>
                   <Select value={form.project_id} onValueChange={val => setForm({ ...form, project_id: val })}>
                     <SelectTrigger><SelectValue placeholder="Optional" /></SelectTrigger>
                     <SelectContent>
@@ -249,21 +291,31 @@ function PosTab({ vendorId, pos, onChanged }) {
       {pos.length === 0 && <p className="py-8 text-center text-muted-foreground">No purchase orders for this vendor.</p>}
 
       {pos.map(po => {
-        const outstanding = po.qty_ordered - po.delivered + po.returned;
+        const st = poDisplayStatus(po);
+        const outstanding = Math.max(0, po.qty_ordered - po.delivered);
+        const expense = po.qty_ordered * (po.rate || 0);
         return (
           <Card key={po.id}>
             <CardContent className="flex flex-col gap-3 pt-4">
               <div className="flex flex-wrap items-center gap-2">
                 <span className="font-medium">{po.item} × {po.qty_ordered}</span>
                 {po.rate && <span className="text-sm text-muted-foreground">@ ₹{po.rate}</span>}
-                <Badge variant={po.status === 'complete' ? 'secondary' : po.status === 'cancelled' ? 'destructive' : 'default'}>
-                  {capitalize(po.status)}
+                <Badge variant={st === 'cancelled' ? 'destructive' : st === 'open' ? 'default' : 'secondary'}>
+                  {PO_STATUS_LABELS[st]}
                 </Badge>
-                {po.status === 'open' && outstanding > 0 && <Badge variant="outline">{outstanding} pending</Badge>}
-                <span className="ml-auto text-xs text-muted-foreground">
+                {st === 'open' && outstanding > 0 && <Badge variant="outline">{outstanding} pending</Badge>}
+                <span className="ml-auto flex items-center gap-1 text-xs text-muted-foreground">
                   {formatDate(po.ordered_on)}
                   {po.order_item && <> · for <Link href={`/orders/${po.order_id}`} className="text-primary hover:underline">{po.order_item}</Link></>}
                   {po.project_name && <> · <Link href={`/projects/${po.project_id}`} className="text-primary hover:underline">{po.project_name}</Link></>}
+                  <Button variant="ghost" size="icon-sm" className={BLUE_ICON_BTN}
+                    onClick={() => { setEditingPo(po); setEditForm({ item: po.item, qty_ordered: po.qty_ordered, rate: po.rate ?? '', order_id: po.order_id ? String(po.order_id) : '', project_id: po.project_id ? String(po.project_id) : '', ordered_on: po.ordered_on, notes: po.notes || '' }); }}
+                    aria-label="Edit PO">
+                    <PencilIcon />
+                  </Button>
+                  <Button variant="ghost" size="icon-sm" className={RED_ICON_BTN} onClick={() => deletePo(po)} aria-label="Delete PO">
+                    <TrashIcon />
+                  </Button>
                 </span>
               </div>
 
@@ -280,14 +332,20 @@ function PosTab({ vendorId, pos, onChanged }) {
                 </div>
               )}
 
-              {po.status === 'open' && (
-                <div className="flex gap-2">
-                  <Button size="sm" variant="outline" onClick={() => setDelivery({ poId: po.id, date: todayISO(), qty_delivered: '', qty_returned: '', notes: '' })}>
-                    <PackageCheckIcon data-icon="inline-start" />Record delivery / return
-                  </Button>
-                  <Button size="sm" variant="ghost" className="text-muted-foreground" onClick={() => cancelPo(po)}>Cancel PO</Button>
+              <div className="flex items-end justify-between gap-2">
+                {st !== 'cancelled' ? (
+                  <div className="flex gap-2">
+                    <Button size="sm" variant="outline" onClick={() => setDelivery({ poId: po.id, date: todayISO(), qty_delivered: '', qty_returned: '', notes: '' })}>
+                      <PackageCheckIcon data-icon="inline-start" />Record delivery / return
+                    </Button>
+                    {st === 'open' && <Button size="sm" variant="ghost" className="text-muted-foreground" onClick={() => cancelPo(po)}>Cancel PO</Button>}
+                  </div>
+                ) : <span />}
+                <div className="text-right">
+                  <p className="text-xs text-muted-foreground">Expense</p>
+                  <p className="text-xl font-bold">{formatMoney(expense) || '₹0'}</p>
                 </div>
-              )}
+              </div>
             </CardContent>
           </Card>
         );
@@ -301,7 +359,7 @@ function PosTab({ vendorId, pos, onChanged }) {
               <div className="grid grid-cols-3 gap-3">
                 <div className="flex flex-col gap-2">
                   <Label>Date</Label>
-                  <Input type="date" value={delivery.date} onChange={e => setDelivery({ ...delivery, date: e.target.value })} />
+                  <DateInput value={delivery.date} onChange={v => setDelivery({ ...delivery, date: v })} />
                 </div>
                 <div className="flex flex-col gap-2">
                   <Label>Qty delivered</Label>
@@ -324,6 +382,68 @@ function PosTab({ vendorId, pos, onChanged }) {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <Dialog open={!!editingPo} onOpenChange={o => !o && setEditingPo(null)}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Edit purchase order</DialogTitle></DialogHeader>
+          {editForm && (
+            <div className="flex flex-col gap-4">
+              <div className="grid grid-cols-3 gap-3">
+                <div className="col-span-2 flex flex-col gap-2">
+                  <Label>Item / material</Label>
+                  <Input value={editForm.item} onChange={e => setEditForm({ ...editForm, item: e.target.value })} />
+                </div>
+                <div className="flex flex-col gap-2">
+                  <Label>Qty</Label>
+                  <Input type="number" min="1" value={editForm.qty_ordered} onChange={e => setEditForm({ ...editForm, qty_ordered: e.target.value })} />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="flex flex-col gap-2">
+                  <Label>Rate per unit (₹)</Label>
+                  <Input type="number" min="0" value={editForm.rate} onChange={e => setEditForm({ ...editForm, rate: e.target.value })} />
+                </div>
+                <div className="flex flex-col gap-2">
+                  <Label>Ordered on</Label>
+                  <DateInput value={editForm.ordered_on} onChange={v => setEditForm({ ...editForm, ordered_on: v })} />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="flex flex-col gap-2">
+                  <Label>For Saag order</Label>
+                  <Select value={editForm.order_id} onValueChange={val => setEditForm({ ...editForm, order_id: val })}>
+                    <SelectTrigger><SelectValue placeholder="Optional" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectGroup>
+                        {orders.map(o => <SelectItem key={o.id} value={String(o.id)}>{o.item} × {o.qty}</SelectItem>)}
+                      </SelectGroup>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="flex flex-col gap-2">
+                  <Label>Site</Label>
+                  <Select value={editForm.project_id} onValueChange={val => setEditForm({ ...editForm, project_id: val })}>
+                    <SelectTrigger><SelectValue placeholder="Optional" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectGroup>
+                        {projects.map(p => <SelectItem key={p.id} value={String(p.id)}>{p.name}</SelectItem>)}
+                      </SelectGroup>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <div className="flex flex-col gap-2">
+                <Label>Notes</Label>
+                <Textarea value={editForm.notes} onChange={e => setEditForm({ ...editForm, notes: e.target.value })} />
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditingPo(null)}>Cancel</Button>
+            <Button onClick={saveEditPo} disabled={busy || !editForm?.item?.trim() || !editForm?.qty_ordered}>Save</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
@@ -334,6 +454,17 @@ function FreightTab({ vendorId, rates, freight, onChanged }) {
   const [rate, setRate] = useState({ from_loc: '', to_loc: '', expected_amount: '' });
   const [charge, setCharge] = useState({ date: todayISO(), from_loc: '', to_loc: '', amount: '', notes: '' });
   const [busy, setBusy] = useState(false);
+  const [projects, setProjects] = useState([]);
+
+  useEffect(() => { api('/api/projects').then(setProjects).catch(() => {}); }, []);
+
+  // Suggestions for the From/To fields: known sites + every location already used on this
+  // vendor's rate card or freight log. Still a free-text input — typing a new value is fine.
+  const locSuggestions = [...new Set([
+    ...projects.map(p => p.name),
+    ...rates.flatMap(r => [r.from_loc, r.to_loc]),
+    ...freight.flatMap(f => [f.from_loc, f.to_loc]),
+  ])];
 
   async function addRate() {
     setBusy(true);
@@ -375,8 +506,8 @@ function FreightTab({ vendorId, rates, freight, onChanged }) {
         </CardHeader>
         <CardContent className="flex flex-col gap-3">
           <div className="flex flex-wrap items-end gap-2">
-            <Input placeholder="From" value={rate.from_loc} onChange={e => setRate({ ...rate, from_loc: e.target.value })} className="w-28 flex-1" />
-            <Input placeholder="To" value={rate.to_loc} onChange={e => setRate({ ...rate, to_loc: e.target.value })} className="w-28 flex-1" />
+            <Input list="vendor-locs" placeholder="From" value={rate.from_loc} onChange={e => setRate({ ...rate, from_loc: e.target.value })} className="w-28 flex-1" />
+            <Input list="vendor-locs" placeholder="To" value={rate.to_loc} onChange={e => setRate({ ...rate, to_loc: e.target.value })} className="w-28 flex-1" />
             <Input type="number" placeholder="₹ expected" value={rate.expected_amount} onChange={e => setRate({ ...rate, expected_amount: e.target.value })} className="w-28" />
             <Button size="sm" onClick={addRate} disabled={busy || !rate.from_loc || !rate.to_loc || !rate.expected_amount}><PlusIcon /></Button>
           </div>
@@ -397,9 +528,9 @@ function FreightTab({ vendorId, rates, freight, onChanged }) {
         <CardHeader><CardTitle>Freight charges</CardTitle></CardHeader>
         <CardContent className="flex flex-col gap-3">
           <div className="flex flex-wrap items-end gap-2">
-            <Input type="date" value={charge.date} onChange={e => setCharge({ ...charge, date: e.target.value })} className="w-36" />
-            <Input placeholder="From" value={charge.from_loc} onChange={e => setCharge({ ...charge, from_loc: e.target.value })} className="w-24 flex-1" />
-            <Input placeholder="To" value={charge.to_loc} onChange={e => setCharge({ ...charge, to_loc: e.target.value })} className="w-24 flex-1" />
+            <DateInput value={charge.date} onChange={v => setCharge({ ...charge, date: v })} className="w-36" />
+            <Input list="vendor-locs" placeholder="From" value={charge.from_loc} onChange={e => setCharge({ ...charge, from_loc: e.target.value })} className="w-24 flex-1" />
+            <Input list="vendor-locs" placeholder="To" value={charge.to_loc} onChange={e => setCharge({ ...charge, to_loc: e.target.value })} className="w-24 flex-1" />
             <Input type="number" placeholder="₹ charged" value={charge.amount} onChange={e => setCharge({ ...charge, amount: e.target.value })} className="w-28" />
             <Button size="sm" onClick={addCharge} disabled={busy || !charge.from_loc || !charge.to_loc || !charge.amount}><PlusIcon /></Button>
           </div>
@@ -446,6 +577,10 @@ function FreightTab({ vendorId, rates, freight, onChanged }) {
           )}
         </CardContent>
       </Card>
+
+      <datalist id="vendor-locs">
+        {locSuggestions.map(l => <option key={l} value={l} />)}
+      </datalist>
     </div>
   );
 }

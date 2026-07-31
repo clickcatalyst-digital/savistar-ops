@@ -1,9 +1,11 @@
 import { NextResponse } from 'next/server';
-import { queryAll, queryOne, execute, softDelete } from '@/lib/db';
+import { queryAll, queryOne, execute, softDelete, vendorExpenseSQL } from '@/lib/db';
 import { getUserFromRequest, requireApprover } from '@/lib/auth';
 
 export async function GET(req, { params }) {
-  const vendor = await queryOne('SELECT * FROM vendors WHERE id = ? AND is_deleted_record = 0', [params.id]);
+  const vendor = await queryOne(
+    `SELECT v.*, ${vendorExpenseSQL('v')} AS total_expense FROM vendors v
+     WHERE v.id = ? AND v.is_deleted_record = 0`, [params.id]);
   if (!vendor) return NextResponse.json({ error: 'Not found' }, { status: 404 });
   const [rates, freight, pos] = await Promise.all([
     queryAll('SELECT * FROM vendor_rates WHERE vendor_id = ? AND is_deleted_record = 0 ORDER BY from_loc, to_loc', [params.id]),

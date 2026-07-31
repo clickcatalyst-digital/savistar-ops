@@ -34,7 +34,7 @@ const ROLE_LABELS = { owner: 'Owner', admin: 'Admin', manager: 'Manager', user: 
 
 export default function Nav({ user }) {
   const pathname = usePathname();
-  const links = user?.role === 'user' ? LINKS.filter(l => l.href !== '/finance') : LINKS;
+  const links = LINKS;
   const router = useRouter();
   const [theme, setTheme] = useState('light');
   const [pwOpen, setPwOpen] = useState(false);

@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { queryAll, execute } from '@/lib/db';
+import { queryAll, execute, vendorExpenseSQL } from '@/lib/db';
 
 export async function GET() {
   const rows = await queryAll(`
@@ -11,7 +11,8 @@ export async function GET() {
           AND LOWER(r.from_loc) = LOWER(f.from_loc) AND LOWER(r.to_loc) = LOWER(f.to_loc)
           AND r.is_deleted_record = 0
         WHERE f.vendor_id = v.id AND f.amount > r.expected_amount
-          AND f.is_deleted_record = 0) AS overcharges
+          AND f.is_deleted_record = 0) AS overcharges,
+      ${vendorExpenseSQL('v')} AS total_expense
     FROM vendors v
     WHERE v.is_deleted_record = 0
     ORDER BY v.name`);

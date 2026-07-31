@@ -2,12 +2,18 @@
 import { NextResponse } from 'next/server';
 import { queryAll, queryOne, execute, softDelete } from '@/lib/db';
 import { uploadToR2, isR2Configured } from '@/lib/r2';
-import { getUserFromRequest, requireNonStaff } from '@/lib/auth';
+import { getUserFromRequest, canAccessCash } from '@/lib/auth';
 
-// Cash-transaction attachments are financial data — staff can attach files to orders,
-// site visits, etc. through this same generic endpoint, just not to cash transactions.
-function guardCashEntity(user, entityType) {
-  return entityType === 'cash_transaction' ? requireNonStaff(user) : null;
+// Cash-transaction attachments are financial data — staff can attach files to their own
+// cash entries (and to orders, site visits, etc. through this same generic endpoint), but
+// never to a cash transaction someone else created.
+async function guardCashEntity(user, entityType, entityId) {
+  if (entityType !== 'cash_transaction') return null;
+  if (!user) return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
+  const txn = await queryOne('SELECT created_by FROM cash_transactions WHERE id = ?', [entityId]);
+  if (!txn) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+  if (!canAccessCash(user, txn.created_by)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  return null;
 }
 
 export async function GET(req) {
@@ -15,7 +21,7 @@ export async function GET(req) {
   const type = searchParams.get('entity_type');
   const id = searchParams.get('entity_id');
   if (!type || !id) return NextResponse.json({ error: 'entity_type and entity_id required' }, { status: 400 });
-  const guard = guardCashEntity(getUserFromRequest(req), type);
+  const guard = await guardCashEntity(getUserFromRequest(req), type, id);
   if (guard) return guard;
   const rows = await queryAll(
     `SELECT * FROM attachments WHERE entity_type = ? AND entity_id = ?
@@ -35,7 +41,7 @@ export async function POST(req) {
   if (!file || !entityType || !entityId) {
     return NextResponse.json({ error: 'file, entity_type and entity_id required' }, { status: 400 });
   }
-  const guard = guardCashEntity(user, entityType);
+  const guard = await guardCashEntity(user, entityType, entityId);
   if (guard) return guard;
   if (file.size > 20 * 1024 * 1024) {
     return NextResponse.json({ error: 'Max file size is 20 MB' }, { status: 400 });
@@ -53,7 +59,7 @@ export async function DELETE(req) {
   const id = searchParams.get('id');
   const row = await queryOne('SELECT * FROM attachments WHERE id = ? AND is_deleted_record = 0', [id]);
   if (!row) return NextResponse.json({ error: 'Not found' }, { status: 404 });
-  const guard = guardCashEntity(getUserFromRequest(req), row.entity_type);
+  const guard = await guardCashEntity(getUserFromRequest(req), row.entity_type, row.entity_id);
   if (guard) return guard;
   // File stays in R2 so a restored row still resolves.
   await softDelete('attachments', id);

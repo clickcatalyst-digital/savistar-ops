@@ -5,8 +5,10 @@ import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { api, showToast, formatDate, capitalize } from '@/lib/client';
 import { todayISO } from '@/lib/date';
+import { poDisplayStatus, PO_STATUS_LABELS } from '@/lib/po';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { DateInput } from '@/components/ui/date-input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
@@ -116,7 +118,7 @@ export default function ProjectDetail() {
             {' '}· started {formatDate(p.start_date)} · {done}/{p.milestones.length} milestones done
           </p>
         </div>
-        <Dialog open={editOpen} onOpenChange={o => { setEditOpen(o); if (o) setEdit({ client_id: p.client_id, name: p.name, status: p.status, start_date: p.start_date || '', notes: p.notes || '' }); }}>
+        <Dialog open={editOpen} onOpenChange={o => { setEditOpen(o); if (o) setEdit({ client_id: p.client_id, name: p.name, status: p.status, start_date: p.start_date || '', notes: p.notes || '', address: p.address || '' }); }}>
           <DialogTrigger asChild><Button variant="outline" size="sm"><PencilIcon data-icon="inline-start" />Edit</Button></DialogTrigger>
           <DialogContent>
             <DialogHeader><DialogTitle>Edit project</DialogTitle></DialogHeader>
@@ -143,8 +145,12 @@ export default function ProjectDetail() {
                   </div>
                   <div className="flex flex-col gap-2">
                     <Label>Start date</Label>
-                    <Input type="date" value={edit.start_date} onChange={e => setEdit({ ...edit, start_date: e.target.value })} />
+                    <DateInput value={edit.start_date} onChange={v => setEdit({ ...edit, start_date: v })} />
                   </div>
+                </div>
+                <div className="flex flex-col gap-2">
+                  <Label>Address (site location)</Label>
+                  <Textarea placeholder="Shown in the Site visits tab" value={edit.address} onChange={e => setEdit({ ...edit, address: e.target.value })} />
                 </div>
                 <div className="flex flex-col gap-2">
                   <Label>Notes</Label>
@@ -179,8 +185,8 @@ export default function ProjectDetail() {
               <div className="flex flex-col gap-2 sm:flex-row">
                 <Input placeholder="New milestone…" value={newMilestone.title}
                   onChange={e => setNewMilestone({ ...newMilestone, title: e.target.value })} className="flex-1" />
-                <Input type="date" value={newMilestone.due_date}
-                  onChange={e => setNewMilestone({ ...newMilestone, due_date: e.target.value })} className="sm:w-44" />
+                <DateInput value={newMilestone.due_date}
+                  onChange={v => setNewMilestone({ ...newMilestone, due_date: v })} className="sm:w-44" />
                 <Button onClick={addMilestone} disabled={!newMilestone.title.trim()}><PlusIcon data-icon="inline-start" />Add</Button>
               </div>
               <div className="flex flex-col gap-1">
@@ -226,16 +232,16 @@ export default function ProjectDetail() {
               <CardContent className="flex flex-col gap-2">
                 {p.vendorPos.length === 0 && <p className="text-sm text-muted-foreground">No vendor POs linked. Create one from the Vendors tab and pick this project.</p>}
                 {p.vendorPos.map(vp => {
-                  const outstanding = vp.qty_ordered - vp.delivered + vp.returned;
+                  const st = poDisplayStatus(vp);
                   return (
                     <Link key={vp.id} href={`/vendors/${vp.vendor_id}`} className="flex items-center justify-between rounded-md border px-3 py-2 text-sm hover:bg-muted">
                       <span className="truncate">
                         <span className="font-medium">{vp.item} × {vp.qty_ordered}</span>
                         <span className="text-muted-foreground"> · {vp.vendor_name}</span>
                       </span>
-                      {outstanding > 0
-                        ? <Badge variant="outline">{outstanding} pending</Badge>
-                        : <Badge variant="secondary">Complete</Badge>}
+                      <Badge variant={st === 'cancelled' ? 'destructive' : st === 'open' ? 'outline' : 'secondary'}>
+                        {PO_STATUS_LABELS[st]}
+                      </Badge>
                     </Link>
                   );
                 })}
@@ -245,43 +251,51 @@ export default function ProjectDetail() {
         </TabsContent>
 
         <TabsContent value="visits" className="mt-4">
-          <Card>
-            <CardHeader className="flex-row items-center justify-between">
-              <CardTitle>Site visits</CardTitle>
-              <Dialog open={visitOpen} onOpenChange={setVisitOpen}>
-                <DialogTrigger asChild><Button size="sm"><MapPinIcon data-icon="inline-start" />Log visit</Button></DialogTrigger>
-                <DialogContent>
-                  <DialogHeader><DialogTitle>Log site visit</DialogTitle></DialogHeader>
-                  <div className="flex flex-col gap-4">
-                    <div className="flex flex-col gap-2">
-                      <Label>Date</Label>
-                      <Input type="date" value={newVisit.visit_date} onChange={e => setNewVisit({ ...newVisit, visit_date: e.target.value })} />
+          <div className="grid gap-4 lg:grid-cols-3">
+            <Card className="lg:col-span-2">
+              <CardHeader className="flex-row items-center justify-between">
+                <CardTitle>Site visits</CardTitle>
+                <Dialog open={visitOpen} onOpenChange={setVisitOpen}>
+                  <DialogTrigger asChild><Button size="sm"><MapPinIcon data-icon="inline-start" />Log visit</Button></DialogTrigger>
+                  <DialogContent>
+                    <DialogHeader><DialogTitle>Log site visit</DialogTitle></DialogHeader>
+                    <div className="flex flex-col gap-4">
+                      <div className="flex flex-col gap-2">
+                        <Label>Date</Label>
+                        <DateInput value={newVisit.visit_date} onChange={v => setNewVisit({ ...newVisit, visit_date: v })} />
+                      </div>
+                      <div className="flex flex-col gap-2">
+                        <Label>Notes</Label>
+                        <Textarea placeholder="What was discussed / measured / decided…" value={newVisit.notes} onChange={e => setNewVisit({ ...newVisit, notes: e.target.value })} />
+                      </div>
                     </div>
-                    <div className="flex flex-col gap-2">
-                      <Label>Notes</Label>
-                      <Textarea placeholder="What was discussed / measured / decided…" value={newVisit.notes} onChange={e => setNewVisit({ ...newVisit, notes: e.target.value })} />
+                    <DialogFooter>
+                      <Button variant="outline" onClick={() => setVisitOpen(false)}>Cancel</Button>
+                      <Button onClick={addVisit} disabled={!newVisit.visit_date}>Save</Button>
+                    </DialogFooter>
+                  </DialogContent>
+                </Dialog>
+              </CardHeader>
+              <CardContent className="flex flex-col gap-3">
+                {p.visits.length === 0 && <p className="py-4 text-center text-sm text-muted-foreground">No site visits logged.</p>}
+                {p.visits.map(v => (
+                  <div key={v.id} className="rounded-lg border p-3">
+                    <div className="flex items-center justify-between">
+                      <p className="text-sm font-medium">{formatDate(v.visit_date)}</p>
+                      <p className="text-xs text-muted-foreground">{v.visited_by}</p>
                     </div>
+                    {v.notes && <p className="mt-1 whitespace-pre-wrap text-sm text-muted-foreground">{v.notes}</p>}
                   </div>
-                  <DialogFooter>
-                    <Button variant="outline" onClick={() => setVisitOpen(false)}>Cancel</Button>
-                    <Button onClick={addVisit} disabled={!newVisit.visit_date}>Save</Button>
-                  </DialogFooter>
-                </DialogContent>
-              </Dialog>
-            </CardHeader>
-            <CardContent className="flex flex-col gap-3">
-              {p.visits.length === 0 && <p className="py-4 text-center text-sm text-muted-foreground">No site visits logged.</p>}
-              {p.visits.map(v => (
-                <div key={v.id} className="rounded-lg border p-3">
-                  <div className="flex items-center justify-between">
-                    <p className="text-sm font-medium">{formatDate(v.visit_date)}</p>
-                    <p className="text-xs text-muted-foreground">{v.visited_by}</p>
-                  </div>
-                  {v.notes && <p className="mt-1 whitespace-pre-wrap text-sm text-muted-foreground">{v.notes}</p>}
-                </div>
-              ))}
-            </CardContent>
-          </Card>
+                ))}
+              </CardContent>
+            </Card>
+            <Card className="lg:col-span-1">
+              <CardHeader><CardTitle>Site address</CardTitle></CardHeader>
+              <CardContent>
+                <p className="whitespace-pre-wrap text-sm text-muted-foreground">{p.address || 'No address on file.'}</p>
+              </CardContent>
+            </Card>
+          </div>
         </TabsContent>
 
         <TabsContent value="conversations" className="mt-4">

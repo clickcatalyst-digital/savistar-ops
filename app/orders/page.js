@@ -6,6 +6,7 @@ import { api, showToast, formatDate, capitalize } from '@/lib/client';
 import { todayISO } from '@/lib/date';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { DateInput } from '@/components/ui/date-input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
@@ -111,11 +112,11 @@ export default function OrdersPage() {
               <div className="grid grid-cols-2 gap-3">
                 <div className="flex flex-col gap-2">
                   <Label>Start date</Label>
-                  <Input type="date" value={form.start_date} onChange={e => setForm({ ...form, start_date: e.target.value })} />
+                  <DateInput value={form.start_date} onChange={v => setForm({ ...form, start_date: v })} />
                 </div>
                 <div className="flex flex-col gap-2">
                   <Label>Due date</Label>
-                  <Input type="date" value={form.due_date} onChange={e => setForm({ ...form, due_date: e.target.value })} />
+                  <DateInput value={form.due_date} onChange={v => setForm({ ...form, due_date: v })} />
                 </div>
               </div>
               <div className="flex flex-col gap-2">

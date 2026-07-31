@@ -25,8 +25,8 @@ export async function GET(req, { params }) {
 export async function PUT(req, { params }) {
   const b = await req.json();
   await execute(
-    'UPDATE projects SET client_id = ?, name = ?, status = ?, start_date = ?, notes = ? WHERE id = ?',
-    [b.client_id || null, b.name, b.status, b.start_date || null, b.notes || null, params.id]);
+    'UPDATE projects SET client_id = ?, name = ?, status = ?, start_date = ?, notes = ?, address = ? WHERE id = ?',
+    [b.client_id || null, b.name, b.status, b.start_date || null, b.notes || null, b.address || null, params.id]);
   return NextResponse.json({ ok: true });
 }
 

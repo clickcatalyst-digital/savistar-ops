@@ -4,8 +4,10 @@ import { useEffect, useState, useCallback } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { api, showToast, formatDate, capitalize } from '@/lib/client';
+import { poDisplayStatus, PO_STATUS_LABELS } from '@/lib/po';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { DateInput } from '@/components/ui/date-input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
@@ -114,11 +116,11 @@ export default function OrderDetail() {
                 <div className="grid grid-cols-2 gap-3">
                   <div className="flex flex-col gap-2">
                     <Label>Start date</Label>
-                    <Input type="date" value={edit.start_date} onChange={e => setEdit({ ...edit, start_date: e.target.value })} />
+                    <DateInput value={edit.start_date} onChange={v => setEdit({ ...edit, start_date: v })} />
                   </div>
                   <div className="flex flex-col gap-2">
                     <Label>Due date</Label>
-                    <Input type="date" value={edit.due_date} onChange={e => setEdit({ ...edit, due_date: e.target.value })} />
+                    <DateInput value={edit.due_date} onChange={v => setEdit({ ...edit, due_date: v })} />
                   </div>
                 </div>
                 <div className="flex flex-col gap-2">
@@ -204,16 +206,16 @@ export default function OrderDetail() {
             <CardContent className="flex flex-col gap-2">
               {o.vendorPos.length === 0 && <p className="text-sm text-muted-foreground">No vendor POs linked.</p>}
               {o.vendorPos.map(vp => {
-                const outstanding = vp.qty_ordered - vp.delivered + vp.returned;
+                const st = poDisplayStatus(vp);
                 return (
                   <Link key={vp.id} href={`/vendors/${vp.vendor_id}`} className="flex items-center justify-between rounded-md border px-3 py-2 text-sm hover:bg-muted">
                     <span className="truncate">
                       <span className="font-medium">{vp.item} × {vp.qty_ordered}</span>
                       <span className="text-muted-foreground"> · {vp.vendor_name}</span>
                     </span>
-                    {outstanding > 0
-                      ? <Badge variant="outline">{outstanding} pending</Badge>
-                      : <Badge variant="secondary">Complete</Badge>}
+                    <Badge variant={st === 'cancelled' ? 'destructive' : st === 'open' ? 'outline' : 'secondary'}>
+                      {PO_STATUS_LABELS[st]}
+                    </Badge>
                   </Link>
                 );
               })}

@@ -7,6 +7,7 @@ import { api, showToast, formatDate, capitalize } from '@/lib/client';
 import { todayISO, todayMonth } from '@/lib/date';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { DateInput } from '@/components/ui/date-input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
@@ -245,7 +246,7 @@ export default function EmployeeDetail() {
                       </div>
                       <div className="flex flex-col gap-2">
                         <Label>Date</Label>
-                        <Input type="date" value={exp.date} onChange={e => setExp({ ...exp, date: e.target.value })} />
+                        <DateInput value={exp.date} onChange={v => setExp({ ...exp, date: v })} />
                       </div>
                     </div>
                     <div className="flex flex-col gap-2">

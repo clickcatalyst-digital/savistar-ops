@@ -7,6 +7,7 @@ import { toISODate } from '@/lib/date';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { DateInput } from '@/components/ui/date-input';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
@@ -170,7 +171,7 @@ export default function Dashboard() {
             <div className="flex flex-wrap gap-2">
               <Input placeholder="New task…" value={newTask.title} onChange={e => setNewTask({ ...newTask, title: e.target.value })}
                 onKeyDown={e => e.key === 'Enter' && newTask.title.trim() && addTask()} className="min-w-32 flex-1" />
-              <Input type="date" value={newTask.due_date} onChange={e => setNewTask({ ...newTask, due_date: e.target.value })} className="w-36 shrink-0" />
+              <DateInput value={newTask.due_date} onChange={v => setNewTask({ ...newTask, due_date: v })} className="w-36 shrink-0" />
               {canAssign && (
                 <Select value={newTask.assigned_to} onValueChange={v => setNewTask({ ...newTask, assigned_to: v })}>
                   <SelectTrigger className="w-36 shrink-0" aria-label="Assign new task to">

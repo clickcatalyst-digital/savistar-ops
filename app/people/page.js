@@ -6,6 +6,7 @@ import { api, showToast, formatMoney, capitalize } from '@/lib/client';
 import { todayISO, todayMonth } from '@/lib/date';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { DateInput } from '@/components/ui/date-input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
@@ -63,7 +64,7 @@ function Worksheet() {
   return (
     <div className="flex flex-col gap-4">
       <div className="flex items-center gap-3">
-        <Input type="date" value={date} onChange={e => setDate(e.target.value)} className="w-44" />
+        <DateInput value={date} onChange={setDate} className="w-44" />
         <p className="text-sm text-muted-foreground">
           {data.rows.filter(r => r.attendance?.status === 'present').length} present ·{' '}
           {data.rows.filter(r => r.attendance?.status === 'half').length} half day ·{' '}
@@ -256,7 +257,7 @@ function Employees() {
                 </div>
                 <div className="flex flex-col gap-2">
                   <Label>Joined</Label>
-                  <Input type="date" value={form.joined_at} onChange={e => setForm({ ...form, joined_at: e.target.value })} />
+                  <DateInput value={form.joined_at} onChange={v => setForm({ ...form, joined_at: v })} />
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-3">
