@@ -11,6 +11,7 @@ import { Input } from '@/components/ui/input';
 import { DateInput } from '@/components/ui/date-input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
@@ -157,11 +158,70 @@ function PosTab({ vendorId, pos, onChanged }) {
   const [editForm, setEditForm] = useState(null);
   const [delivery, setDelivery] = useState(null); // { poId, date, qty_delivered, qty_returned, notes }
   const [busy, setBusy] = useState(false);
+  const [filterDate, setFilterDate] = useState('');
+  const [filterSite, setFilterSite] = useState('');
+  const [search, setSearch] = useState('');
+  const [selected, setSelected] = useState(new Set());
 
   useEffect(() => {
     api('/api/orders?status=all').then(setOrders).catch(() => {});
     api('/api/projects').then(setProjects).catch(() => {});
   }, []);
+
+  const filteredPos = pos.filter(po =>
+    (!filterDate || po.ordered_on === filterDate) &&
+    (!filterSite || String(po.project_id) === filterSite) &&
+    (!search.trim() || po.item.toLowerCase().includes(search.trim().toLowerCase())));
+  const siteOptions = [...new Map(pos.filter(po => po.project_id).map(po => [po.project_id, po.project_name])).entries()];
+  const selectableIds = filteredPos.filter(po => poDisplayStatus(po) !== 'cancelled').map(po => po.id);
+  const allSelected = selectableIds.length > 0 && selectableIds.every(id => selected.has(id));
+
+  function toggleSelectAll() {
+    setSelected(allSelected ? new Set() : new Set(selectableIds));
+  }
+  function toggleOne(id) {
+    setSelected(s => {
+      const next = new Set(s);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  }
+
+  // "Delivered": top up delivered to the full ordered qty, no change to returns.
+  async function bulkMarkDelivered() {
+    const targets = filteredPos.filter(po => selected.has(po.id));
+    setBusy(true);
+    try {
+      await Promise.all(targets.map(po => {
+        const outstanding = Math.max(0, po.qty_ordered - po.delivered);
+        if (!outstanding) return null;
+        return api(`/api/vendor-pos/${po.id}/deliveries`, { method: 'POST', body: { date: todayISO(), qty_delivered: outstanding, qty_returned: 0 } });
+      }));
+      showToast('Marked as delivered');
+      setSelected(new Set());
+      onChanged();
+    } catch (e) { showToast(e.message, 'error'); }
+    setBusy(false);
+  }
+
+  // "Returned": top up both delivered and returned to the full ordered qty, so the
+  // whole line nets out to fully returned regardless of what was already recorded.
+  async function bulkMarkReturned() {
+    const targets = filteredPos.filter(po => selected.has(po.id));
+    setBusy(true);
+    try {
+      await Promise.all(targets.map(po => {
+        const deliverDelta = Math.max(0, po.qty_ordered - po.delivered);
+        const returnDelta = Math.max(0, po.qty_ordered - po.returned);
+        if (!deliverDelta && !returnDelta) return null;
+        return api(`/api/vendor-pos/${po.id}/deliveries`, { method: 'POST', body: { date: todayISO(), qty_delivered: deliverDelta, qty_returned: returnDelta } });
+      }));
+      showToast('Marked as returned');
+      setSelected(new Set());
+      onChanged();
+    } catch (e) { showToast(e.message, 'error'); }
+    setBusy(false);
+  }
 
   function addItemRow() {
     setForm(f => ({ ...f, items: [...f.items, emptyItemRow()] }));
@@ -319,7 +379,55 @@ function PosTab({ vendorId, pos, onChanged }) {
 
       {pos.length === 0 && <p className="py-8 text-center text-muted-foreground">No purchase orders for this vendor.</p>}
 
-      {groupPosForDisplay(pos).map(({ key, items }) => {
+      {pos.length > 0 && (
+        <div className="flex flex-wrap items-end gap-2">
+          <div className="flex flex-col gap-2">
+            <Label className="text-xs text-muted-foreground">Order date</Label>
+            <DateInput value={filterDate} onChange={setFilterDate} className="w-36" />
+          </div>
+          <div className="flex flex-col gap-2">
+            <Label className="text-xs text-muted-foreground">Site</Label>
+            <Select value={filterSite} onValueChange={setFilterSite}>
+              <SelectTrigger className="w-40"><SelectValue placeholder="All sites" /></SelectTrigger>
+              <SelectContent>
+                <SelectGroup>
+                  {siteOptions.map(([pid, name]) => <SelectItem key={pid} value={String(pid)}>{name}</SelectItem>)}
+                </SelectGroup>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="flex min-w-40 flex-1 flex-col gap-2">
+            <Label className="text-xs text-muted-foreground">Item</Label>
+            <Input placeholder="Search item…" value={search} onChange={e => setSearch(e.target.value)} />
+          </div>
+          {(filterDate || filterSite || search) && (
+            <Button variant="ghost" size="sm" onClick={() => { setFilterDate(''); setFilterSite(''); setSearch(''); }}>
+              Clear filters
+            </Button>
+          )}
+        </div>
+      )}
+
+      {pos.length > 0 && filteredPos.length === 0 && (
+        <p className="py-8 text-center text-muted-foreground">No POs match your filters.</p>
+      )}
+
+      {selectableIds.length > 0 && (
+        <div className="flex items-center gap-3 rounded-md border bg-muted/40 px-3 py-2">
+          <Checkbox checked={allSelected} onCheckedChange={toggleSelectAll} aria-label="Select all" />
+          <span className="text-sm text-muted-foreground">
+            {selected.size > 0 ? `${selected.size} selected` : `Select all (${selectableIds.length})`}
+          </span>
+          {selected.size > 0 && (
+            <div className="ml-auto flex gap-2">
+              <Button size="sm" variant="outline" disabled={busy} onClick={bulkMarkDelivered}>Mark as delivered</Button>
+              <Button size="sm" variant="outline" disabled={busy} onClick={bulkMarkReturned}>Mark as returned</Button>
+            </div>
+          )}
+        </div>
+      )}
+
+      {groupPosForDisplay(filteredPos).map(({ key, items }) => {
         const groupExpense = items.reduce((sum, po) =>
           sum + (poDisplayStatus(po) === 'cancelled' ? 0 : po.qty_ordered * (po.rate || 0)), 0);
         const first = items[0];
@@ -337,6 +445,9 @@ function PosTab({ vendorId, pos, onChanged }) {
                 return (
                   <div key={po.id} className={i > 0 ? 'flex flex-col gap-3 border-t pt-3' : 'flex flex-col gap-3'}>
                     <div className="flex flex-wrap items-center gap-2">
+                      {st !== 'cancelled' && (
+                        <Checkbox checked={selected.has(po.id)} onCheckedChange={() => toggleOne(po.id)} aria-label="Select PO" />
+                      )}
                       <span className="font-medium">{po.item} × {po.qty_ordered}</span>
                       {po.rate && <span className="text-sm text-muted-foreground">@ ₹{po.rate}</span>}
                       <Badge variant={st === 'cancelled' ? 'destructive' : st === 'open' ? 'default' : 'secondary'}>
