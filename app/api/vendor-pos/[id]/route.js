@@ -14,9 +14,9 @@ export async function PUT(req, { params }) {
   return NextResponse.json({ ok: true });
 }
 
+// Delete is open to any logged-in user (incl. staff) — only editing a PO's fields stays
+// approver-only, per PUT above.
 export async function DELETE(req, { params }) {
-  const guard = requireApprover(getUserFromRequest(req));
-  if (guard) return guard;
   await softDelete('vendor_pos', params.id);
   return NextResponse.json({ ok: true });
 }

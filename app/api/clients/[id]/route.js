@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
 import { queryAll, queryOne, execute, softDelete } from '@/lib/db';
-import { getUserFromRequest, requireApprover } from '@/lib/auth';
 
 export async function GET(req, { params }) {
   const client = await queryOne('SELECT * FROM clients WHERE id = ? AND is_deleted_record = 0', [params.id]);
@@ -24,8 +23,6 @@ export async function PUT(req, { params }) {
 }
 
 export async function DELETE(req, { params }) {
-  const guard = requireApprover(getUserFromRequest(req));
-  if (guard) return guard;
   await softDelete('clients', params.id);
   return NextResponse.json({ ok: true });
 }

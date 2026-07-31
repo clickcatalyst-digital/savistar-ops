@@ -293,7 +293,8 @@ function PosTab({ vendorId, pos, onChanged }) {
       {pos.map(po => {
         const st = poDisplayStatus(po);
         const outstanding = Math.max(0, po.qty_ordered - po.delivered);
-        const expense = po.qty_ordered * (po.rate || 0);
+        // A cancelled PO was never fulfilled or owed on — matches vendorExpenseSQL server-side.
+        const expense = st === 'cancelled' ? 0 : po.qty_ordered * (po.rate || 0);
         return (
           <Card key={po.id}>
             <CardContent className="flex flex-col gap-3 pt-4">
