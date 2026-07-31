@@ -137,6 +137,17 @@ export default function VendorDetail() {
 const emptyItemRow = () => ({ item: '', qty_ordered: '', rate: '' });
 const EMPTY_PO_FORM = () => ({ order_id: '', project_id: '', ordered_on: todayISO(), items: [emptyItemRow()] });
 
+// POs sharing the same site + order date were entered together — group them into one card.
+function groupPosForDisplay(pos) {
+  const map = new Map();
+  for (const po of pos) {
+    const key = `${po.ordered_on}__${po.project_id ?? 'none'}`;
+    if (!map.has(key)) map.set(key, []);
+    map.get(key).push(po);
+  }
+  return [...map.entries()].map(([key, items]) => ({ key, items }));
+}
+
 function PosTab({ vendorId, pos, onChanged }) {
   const [orders, setOrders] = useState([]);
   const [projects, setProjects] = useState([]);
@@ -308,61 +319,72 @@ function PosTab({ vendorId, pos, onChanged }) {
 
       {pos.length === 0 && <p className="py-8 text-center text-muted-foreground">No purchase orders for this vendor.</p>}
 
-      {pos.map(po => {
-        const st = poDisplayStatus(po);
-        const outstanding = Math.max(0, po.qty_ordered - po.delivered);
-        // A cancelled PO was never fulfilled or owed on — matches vendorExpenseSQL server-side.
-        const expense = st === 'cancelled' ? 0 : po.qty_ordered * (po.rate || 0);
+      {groupPosForDisplay(pos).map(({ key, items }) => {
+        const groupExpense = items.reduce((sum, po) =>
+          sum + (poDisplayStatus(po) === 'cancelled' ? 0 : po.qty_ordered * (po.rate || 0)), 0);
+        const first = items[0];
         return (
-          <Card key={po.id}>
+          <Card key={key}>
             <CardContent className="flex flex-col gap-3 pt-4">
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="font-medium">{po.item} × {po.qty_ordered}</span>
-                {po.rate && <span className="text-sm text-muted-foreground">@ ₹{po.rate}</span>}
-                <Badge variant={st === 'cancelled' ? 'destructive' : st === 'open' ? 'default' : 'secondary'}>
-                  {PO_STATUS_LABELS[st]}
-                </Badge>
-                {st === 'open' && outstanding > 0 && <Badge variant="outline">{outstanding} pending</Badge>}
-                <span className="ml-auto flex items-center gap-1 text-xs text-muted-foreground">
-                  {formatDate(po.ordered_on)}
-                  {po.order_item && <> · for <Link href={`/orders/${po.order_id}`} className="text-primary hover:underline">{po.order_item}</Link></>}
-                  {po.project_name && <> · <Link href={`/projects/${po.project_id}`} className="text-primary hover:underline">{po.project_name}</Link></>}
-                  <Button variant="ghost" size="icon-sm" className={BLUE_ICON_BTN}
-                    onClick={() => { setEditingPo(po); setEditForm({ item: po.item, qty_ordered: po.qty_ordered, rate: po.rate ?? '', order_id: po.order_id ? String(po.order_id) : '', project_id: po.project_id ? String(po.project_id) : '', ordered_on: po.ordered_on, notes: po.notes || '' }); }}
-                    aria-label="Edit PO">
-                    <PencilIcon />
-                  </Button>
-                  <Button variant="ghost" size="icon-sm" className={RED_ICON_BTN} onClick={() => deletePo(po)} aria-label="Delete PO">
-                    <TrashIcon />
-                  </Button>
-                </span>
+              <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                <span>{formatDate(first.ordered_on)}</span>
+                {first.project_name && <>· <Link href={`/projects/${first.project_id}`} className="text-primary hover:underline">{first.project_name}</Link></>}
               </div>
 
-              {po.deliveries.length > 0 && (
-                <div className="flex flex-col gap-1 border-t pt-2">
-                  {po.deliveries.map(d => (
-                    <div key={d.id} className="flex items-center gap-3 text-sm text-muted-foreground">
-                      <span className="w-24 shrink-0">{formatDate(d.date)}</span>
-                      {d.qty_delivered > 0 && <span className="text-foreground">+{d.qty_delivered} delivered</span>}
-                      {d.qty_returned > 0 && <span className="text-destructive">−{d.qty_returned} returned</span>}
-                      {d.notes && <span className="truncate">· {d.notes}</span>}
+              {items.map((po, i) => {
+                const st = poDisplayStatus(po);
+                const outstanding = Math.max(0, po.qty_ordered - po.delivered);
+                return (
+                  <div key={po.id} className={i > 0 ? 'flex flex-col gap-3 border-t pt-3' : 'flex flex-col gap-3'}>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="font-medium">{po.item} × {po.qty_ordered}</span>
+                      {po.rate && <span className="text-sm text-muted-foreground">@ ₹{po.rate}</span>}
+                      <Badge variant={st === 'cancelled' ? 'destructive' : st === 'open' ? 'default' : 'secondary'}>
+                        {PO_STATUS_LABELS[st]}
+                      </Badge>
+                      {st === 'open' && outstanding > 0 && <Badge variant="outline">{outstanding} pending</Badge>}
+                      <span className="ml-auto flex items-center gap-1 text-xs text-muted-foreground">
+                        {po.order_item && <>for <Link href={`/orders/${po.order_id}`} className="text-primary hover:underline">{po.order_item}</Link></>}
+                        <Button variant="ghost" size="icon-sm" className={BLUE_ICON_BTN}
+                          onClick={() => { setEditingPo(po); setEditForm({ item: po.item, qty_ordered: po.qty_ordered, rate: po.rate ?? '', order_id: po.order_id ? String(po.order_id) : '', project_id: po.project_id ? String(po.project_id) : '', ordered_on: po.ordered_on, notes: po.notes || '' }); }}
+                          aria-label="Edit PO">
+                          <PencilIcon />
+                        </Button>
+                        <Button variant="ghost" size="icon-sm" className={RED_ICON_BTN} onClick={() => deletePo(po)} aria-label="Delete PO">
+                          <TrashIcon />
+                        </Button>
+                      </span>
                     </div>
-                  ))}
-                </div>
-              )}
 
-              <div className="flex items-end justify-between gap-2">
-                {st !== 'cancelled' ? (
-                  <div className="flex gap-2">
-                    <Button size="sm" variant="outline" onClick={() => setDelivery({ poId: po.id, date: todayISO(), qty_delivered: '', qty_returned: '', notes: '' })}>
-                      <PackageCheckIcon data-icon="inline-start" />Record delivery / return
-                    </Button>
-                    {st === 'open' && <Button size="sm" variant="ghost" className="text-muted-foreground" onClick={() => cancelPo(po)}>Cancel PO</Button>}
+                    {po.deliveries.length > 0 && (
+                      <div className="flex flex-col gap-1">
+                        {po.deliveries.map(d => (
+                          <div key={d.id} className="flex items-center gap-3 text-sm text-muted-foreground">
+                            <span className="w-24 shrink-0">{formatDate(d.date)}</span>
+                            {d.qty_delivered > 0 && <span className="text-foreground">+{d.qty_delivered} delivered</span>}
+                            {d.qty_returned > 0 && <span className="text-destructive">−{d.qty_returned} returned</span>}
+                            {d.notes && <span className="truncate">· {d.notes}</span>}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {st !== 'cancelled' && (
+                      <div className="flex gap-2">
+                        <Button size="sm" variant="outline" onClick={() => setDelivery({ poId: po.id, date: todayISO(), qty_delivered: '', qty_returned: '', notes: '' })}>
+                          <PackageCheckIcon data-icon="inline-start" />Record delivery / return
+                        </Button>
+                        {st === 'open' && <Button size="sm" variant="ghost" className="text-muted-foreground" onClick={() => cancelPo(po)}>Cancel PO</Button>}
+                      </div>
+                    )}
                   </div>
-                ) : <span />}
+                );
+              })}
+
+              <div className="flex justify-end border-t pt-3">
                 <div className="text-right">
                   <p className="text-xs text-muted-foreground">Expense</p>
-                  <p className="text-xl font-bold">{formatMoney(expense) || '₹0'}</p>
+                  <p className="text-xl font-bold">{formatMoney(groupExpense) || '₹0'}</p>
                 </div>
               </div>
             </CardContent>
