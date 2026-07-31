@@ -134,11 +134,14 @@ export default function VendorDetail() {
 
 /* ---------------- Purchase orders ---------------- */
 
+const emptyItemRow = () => ({ item: '', qty_ordered: '', rate: '' });
+const EMPTY_PO_FORM = () => ({ order_id: '', project_id: '', ordered_on: todayISO(), items: [emptyItemRow()] });
+
 function PosTab({ vendorId, pos, onChanged }) {
   const [orders, setOrders] = useState([]);
   const [projects, setProjects] = useState([]);
   const [open, setOpen] = useState(false);
-  const [form, setForm] = useState({ item: '', qty_ordered: '', rate: '', order_id: '', project_id: '', ordered_on: todayISO(), notes: '' });
+  const [form, setForm] = useState(EMPTY_PO_FORM);
   const [editingPo, setEditingPo] = useState(null); // the PO row being edited
   const [editForm, setEditForm] = useState(null);
   const [delivery, setDelivery] = useState(null); // { poId, date, qty_delivered, qty_returned, notes }
@@ -149,22 +152,35 @@ function PosTab({ vendorId, pos, onChanged }) {
     api('/api/projects').then(setProjects).catch(() => {});
   }, []);
 
+  function addItemRow() {
+    setForm(f => ({ ...f, items: [...f.items, emptyItemRow()] }));
+  }
+  function removeItemRow(i) {
+    setForm(f => ({ ...f, items: f.items.filter((_, idx) => idx !== i) }));
+  }
+  function updateItemRow(i, field, value) {
+    setForm(f => ({ ...f, items: f.items.map((it, idx) => idx === i ? { ...it, [field]: value } : it) }));
+  }
+
+  // One PO row per item line — all sharing the same vendor, site, "for order" and date.
   async function createPo() {
+    const validItems = form.items.filter(it => it.item.trim() && it.qty_ordered);
+    if (!validItems.length) return;
     setBusy(true);
     try {
-      await api('/api/vendor-pos', {
+      await Promise.all(validItems.map(it => api('/api/vendor-pos', {
         method: 'POST',
         body: {
-          vendor_id: vendorId, item: form.item, qty_ordered: Number(form.qty_ordered),
-          rate: form.rate ? Number(form.rate) : null,
+          vendor_id: vendorId, item: it.item, qty_ordered: Number(it.qty_ordered),
+          rate: it.rate ? Number(it.rate) : null,
           order_id: form.order_id ? Number(form.order_id) : null,
           project_id: form.project_id ? Number(form.project_id) : null,
-          ordered_on: form.ordered_on, notes: form.notes,
+          ordered_on: form.ordered_on,
         },
-      });
-      showToast('PO created');
+      })));
+      showToast(validItems.length > 1 ? `${validItems.length} POs created` : 'PO created');
       setOpen(false);
-      setForm({ item: '', qty_ordered: '', rate: '', order_id: '', project_id: '', ordered_on: todayISO(), notes: '' });
+      setForm(EMPTY_PO_FORM());
       onChanged();
     } catch (e) { showToast(e.message, 'error'); }
     setBusy(false);
@@ -235,27 +251,29 @@ function PosTab({ vendorId, pos, onChanged }) {
           <DialogContent>
             <DialogHeader><DialogTitle>New purchase order</DialogTitle></DialogHeader>
             <div className="flex flex-col gap-4">
-              <div className="grid grid-cols-3 gap-3">
-                <div className="col-span-2 flex flex-col gap-2">
-                  <Label>Item / material</Label>
-                  <Input placeholder="e.g. 19mm plywood sheet" value={form.item} onChange={e => setForm({ ...form, item: e.target.value })} />
-                </div>
-                <div className="flex flex-col gap-2">
-                  <Label>Qty</Label>
-                  <Input type="number" min="1" value={form.qty_ordered} onChange={e => setForm({ ...form, qty_ordered: e.target.value })} />
-                </div>
+              <div className="flex flex-col gap-2">
+                <Label>Items</Label>
+                {form.items.map((it, i) => (
+                  <div key={i} className="flex items-end gap-2">
+                    <Input placeholder="e.g. 19mm plywood sheet" value={it.item} onChange={e => updateItemRow(i, 'item', e.target.value)} className="flex-1" />
+                    <Input type="number" min="1" placeholder="Qty" value={it.qty_ordered} onChange={e => updateItemRow(i, 'qty_ordered', e.target.value)} className="w-20" />
+                    <Input type="number" min="0" placeholder="₹ rate" value={it.rate} onChange={e => updateItemRow(i, 'rate', e.target.value)} className="w-24" />
+                    {form.items.length > 1 && (
+                      <Button variant="ghost" size="icon-sm" className={RED_ICON_BTN} onClick={() => removeItemRow(i)} aria-label="Remove item">
+                        <TrashIcon />
+                      </Button>
+                    )}
+                  </div>
+                ))}
+                <Button variant="ghost" size="sm" className="self-start text-muted-foreground" onClick={addItemRow}>
+                  <PlusIcon data-icon="inline-start" />Add another item
+                </Button>
               </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div className="flex flex-col gap-2">
-                  <Label>Rate per unit (₹)</Label>
-                  <Input type="number" min="0" value={form.rate} onChange={e => setForm({ ...form, rate: e.target.value })} />
-                </div>
+              <div className="grid grid-cols-3 gap-3">
                 <div className="flex flex-col gap-2">
                   <Label>Ordered on</Label>
                   <DateInput value={form.ordered_on} onChange={v => setForm({ ...form, ordered_on: v })} />
                 </div>
-              </div>
-              <div className="grid grid-cols-2 gap-3">
                 <div className="flex flex-col gap-2">
                   <Label>For Saag order</Label>
                   <Select value={form.order_id} onValueChange={val => setForm({ ...form, order_id: val })}>
@@ -282,7 +300,7 @@ function PosTab({ vendorId, pos, onChanged }) {
             </div>
             <DialogFooter>
               <Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
-              <Button onClick={createPo} disabled={busy || !form.item.trim() || !form.qty_ordered}>Create</Button>
+              <Button onClick={createPo} disabled={busy || !form.items.some(it => it.item.trim() && it.qty_ordered)}>Create</Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
