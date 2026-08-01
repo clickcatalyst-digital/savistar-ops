@@ -1,3 +1,5 @@
+// app/api/users/route.js
+
 import { NextResponse } from 'next/server';
 import bcrypt from 'bcryptjs';
 import { queryAll, execute } from '@/lib/db';
@@ -6,7 +8,7 @@ import { getUserFromRequest, requireApprover } from '@/lib/auth';
 export async function GET(req) {
   const guard = requireApprover(getUserFromRequest(req));
   if (guard) return guard;
-  const rows = await queryAll('SELECT id, username, role, display_name, active, created_at FROM users ORDER BY username');
+  const rows = await queryAll('SELECT id, username, role, display_name, active, created_at, avatar_color, avatar_font, avatar_image_key AS avatar_url FROM users ORDER BY username');
   return NextResponse.json(rows);
 }
 

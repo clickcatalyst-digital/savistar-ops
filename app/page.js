@@ -21,6 +21,7 @@ import {
 } from '@/components/ui/select';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ChevronLeftIcon, ChevronRightIcon, PlusIcon, FolderKanbanIcon, MapPinIcon, ArmchairIcon, ListTodoIcon, Trash2Icon, CalendarIcon, UserIcon } from 'lucide-react';
+import { UserAvatar } from '@/components/user-avatar';
 
 const fmtISO = toISODate;
 
@@ -39,6 +40,98 @@ const EVENT_KIND_LIGHT = {
   visit: 'bg-teal-500/35',
   order: 'bg-violet-500/35',
 };
+
+// Warm, faintly grained surface shared by both dashboard cards. Two dot layers at
+// different scales/offsets avoid an obvious repeating grid; the shadow lifts it
+// off the page like a sheet resting on the surface below.
+const PAPER_STYLE = {
+  backgroundColor: '#faf7f1',
+  backgroundImage: `
+    radial-gradient(ellipse at center, transparent 68%, rgba(0,0,0,0.015) 100%),
+    radial-gradient(circle at 24% 18%, rgba(255,255,255,0.16) 0%, transparent 38%),
+    radial-gradient(circle at 78% 82%, rgba(0,0,0,0.010) 0%, transparent 42%),
+    radial-gradient(rgba(90,75,40,0.024) 0.55px, transparent 0.65px),
+    radial-gradient(rgba(255,255,255,0.10) 0.5px, transparent 0.6px),
+    linear-gradient(180deg, #fcfaf6 0%, #f8f5ee 100%)
+  `,
+  backgroundSize: `
+    100% 100%,
+    100% 100%,
+    100% 100%,
+    5px 5px,
+    9px 9px,
+    100% 100%
+  `,
+  backgroundPosition: `
+    center,
+    center,
+    center,
+    0 0,
+    2px 3px,
+    center
+  `,
+  border: '1px solid rgba(120,100,70,0.08)',
+  boxShadow: `
+    inset 0 1px 0 rgba(255,255,255,.82),
+    inset 0 -1px 0 rgba(0,0,0,.025),
+    0 3px 8px rgba(0,0,0,.05),
+    0 20px 40px -20px rgba(0,0,0,.20)
+  `,
+};
+
+// Vintage spiral-bound rings — pure SVG, so no external image asset is needed.
+function RingArt() {
+  return (
+    <>
+      {/* the loop — stops right at the hole, implying it continues behind, unseen */}
+      <path d="M3.5 15 C3.5 5 5.5 2 8 2 C10.5 2 12.5 5 12.5 15"
+        fill="none" stroke="#1f2937" strokeWidth="2.6" strokeLinecap="round" />
+      <path d="M5 14.5 C5 6.5 6.3 4 8 4 C9.7 4 11 6.5 11 14.5"
+        fill="none" stroke="#94a3b8" strokeWidth="1" strokeLinecap="round" />
+      {/* punched hole in the card where the wire disappears */}
+      <ellipse cx="8" cy="16.3" rx="4.4" ry="2.3" fill="#0f172a" fillOpacity="0.7" />
+      <ellipse cx="8" cy="15.6" rx="4.4" ry="1.6" fill="#0f172a" fillOpacity="0.3" />
+    </>
+  );
+}
+
+function SpiralRings({ count = 16 }) {
+  const rings = Array.from({ length: count });
+  return (
+    <>
+      {/* full ring, behind the card — the card's own background hides this everywhere
+          except the two slivers redrawn on top of it below */}
+      <div className="pointer-events-none absolute inset-x-4 top-0 z-10 flex -translate-y-2 justify-between" aria-hidden="true">
+        {rings.map((_, i) => (
+          <svg key={i} width="16" height="22" viewBox="0 0 16 22" className="shrink-0 drop-shadow-sm">
+            <RingArt />
+          </svg>
+        ))}
+      </div>
+      {/* sliver 1: the loop, redrawn in front, but only down to the card's top edge */}
+      <div className="pointer-events-none absolute inset-x-4 top-0 z-40 flex -translate-y-2 justify-between" aria-hidden="true">
+        {rings.map((_, i) => (
+          <svg key={i} width="16" height="22" viewBox="0 0 16 22" className="shrink-0 drop-shadow-sm"
+            style={{ clipPath: 'inset(0 0 64% 0)' }}>
+            <RingArt />
+          </svg>
+        ))}
+      </div>
+      {/* sliver 2: the punched hole, redrawn in front again, a few px inside the card
+          — this is the piece the previous clip was accidentally cutting off */}
+      <div className="pointer-events-none absolute inset-x-4 top-0 z-40 flex -translate-y-2 justify-between" aria-hidden="true">
+        {rings.map((_, i) => (
+          <svg key={i} width="16" height="22" viewBox="0 0 16 22" className="shrink-0 drop-shadow-sm"
+            style={{ clipPath: 'inset(59% 0 0 0)' }}>
+            <RingArt />
+          </svg>
+        ))}
+      </div>
+    </>
+  );
+}
+
+
 
 function DaySection({ label, icon, onAdd, addColorClass = 'bg-muted-foreground/40 hover:bg-muted-foreground/70', count, children }) {
   return (
@@ -86,14 +179,20 @@ function DueDatePicker({ value, onChange, className }) {
   const [open, setOpen] = useState(false);
   const selected = value ? new Date(`${value}T00:00:00`) : undefined;
   const isDefault = value === fmtISO(new Date());
+  const shortLabel = selected ? `${selected.getDate()}/${selected.getMonth() + 1}` : null;
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
         <Button type="button" variant="outline" size="icon"
           title={value ? format(selected, 'PPP') : 'Pick a date'}
-          className={cn('relative size-9 shrink-0 rounded-full', className)}>
-          <CalendarIcon className="size-4" />
-          {!isDefault && <span className="absolute -right-0.5 -top-0.5 size-2 rounded-full bg-primary ring-2 ring-background" />}
+          className={cn('relative size-9 shrink-0 rounded-full',
+            !isDefault && 'border-transparent bg-primary text-primary-foreground hover:bg-primary/90',
+            className)}>
+          {!isDefault ? (
+            <span className="text-[11px] font-semibold leading-none tabular-nums">{shortLabel}</span>
+          ) : (
+            <CalendarIcon className="size-4" />
+          )}
         </Button>
       </PopoverTrigger>
       <PopoverContent className="w-auto p-0" align="start">
@@ -113,9 +212,8 @@ function AssignPicker({ users, value, onChange, className }) {
       <PopoverTrigger asChild>
         <Button type="button" variant="outline" size="icon"
           title={assigned ? `Assigned to ${assigned.display_name || assigned.username}` : 'Assign to…'}
-          className={cn('relative size-9 shrink-0 rounded-full', className)}>
-          <UserIcon className="size-4" />
-          {assigned && <span className="absolute -right-0.5 -top-0.5 size-2 rounded-full bg-primary ring-2 ring-background" />}
+          className={cn('relative size-9 shrink-0 overflow-hidden rounded-full p-0', className)}>
+          {assigned ? <UserAvatar user={assigned} size="size-9" /> : <UserIcon className="size-4" />}
         </Button>
       </PopoverTrigger>
       <PopoverContent className="w-44 p-1" align="start">
@@ -125,7 +223,8 @@ function AssignPicker({ users, value, onChange, className }) {
         </button>
         {users.map(u => (
           <button key={u.id} type="button" onClick={() => { onChange(u.username); setOpen(false); }}
-            className={cn('flex w-full items-center rounded-md px-2 py-1.5 text-left text-sm hover:bg-muted', value === u.username && 'font-medium text-primary')}>
+            className={cn('flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm hover:bg-muted', value === u.username && 'font-medium text-primary')}>
+            <UserAvatar user={u} size="size-5" textSize="text-[10px]" />
             {u.display_name || u.username}
           </button>
         ))}
@@ -312,7 +411,7 @@ export default function Dashboard() {
   // The API's ?who= only supports mine|all — there's no per-user filter param — so when
   // taskScope is 'all' we fetch everyone's tasks and narrow to filterUser client-side below.
   const loadToday = useCallback(async () => {
-    setTodayTasks(await api(`/api/tasks?scope=today&who=${taskScope}`));
+    setTodayTasks(await api(`/api/tasks?scope=today&who=${taskScope}&today=${fmtISO(new Date())}`));
   }, [taskScope]);
 
   useEffect(() => { loadCalendar(); }, [loadCalendar]);
@@ -321,12 +420,16 @@ export default function Dashboard() {
   const byDate = useMemo(() => {
     const map = {};
     const add = (date, item) => { if (date) (map[date] ||= []).push(item); };
-    for (const t of events.tasks) add(t.date, { ...t, kind: 'task' });
+    // API's ?who= only supports mine|all, same as loadToday — narrow to filterUser client-side.
+    const visibleCalendarTasks = taskScope === 'all' && filterUser
+      ? events.tasks.filter(t => t.assigned_to === filterUser)
+      : events.tasks;
+    for (const t of visibleCalendarTasks) add(t.date, { ...t, kind: 'task' });
     for (const m of events.milestones) add(m.date, { ...m, kind: 'milestone' });
     for (const v of events.visits) add(v.date, { ...v, kind: 'visit', title: `Site visit · ${v.project_name}` });
     for (const o of events.orders) add(o.date, { ...o, kind: 'order', title: `${o.item} × ${o.qty} due` });
     return map;
-  }, [events]);
+  }, [events, taskScope, filterUser]);
 
   async function addTask() {
     try {
@@ -387,7 +490,7 @@ export default function Dashboard() {
         return `${startStr} – ${endStr}`;
       })()
     : cursor.toLocaleDateString('en-IN', { month: 'long', year: 'numeric' });
-  const visibleCount = viewMode === 'week' ? 6 : 3;
+  const visibleCount = viewMode === 'week' ? 12 : 3;
   const cellMinH = viewMode === 'week' ? 'h-[calc(100vh-22rem)] min-h-48' : 'min-h-24';
 
   const dayItems = byDate[dayOpen] || [];
@@ -398,295 +501,326 @@ export default function Dashboard() {
 
   return (
     <div className="container flex flex-col gap-4 py-6">
-      <div className="grid gap-4 lg:grid-cols-3">
+      <div className="grid gap-4 lg:grid-cols-[7fr_3fr]">
         {/* Calendar */}
-        <Card className="overflow-hidden rounded-2xl border-none shadow-sm lg:col-span-2">
-          <CardHeader className="pb-2">
-            <div className="flex w-full flex-nowrap items-center justify-between gap-2">
-              <h2 className="text-lg font-semibold tracking-tight text-foreground">
-                {viewMode === 'year' ? cursor.getFullYear() : monthLabel}
-              </h2>
-              <Tabs value={viewMode} onValueChange={setViewMode}>
-                <TabsList className="h-8">
-                  <TabsTrigger value="week" className="px-3 text-xs font-medium">Week</TabsTrigger>
-                  <TabsTrigger value="month" className="px-3 text-xs font-medium">Month</TabsTrigger>
-                  <TabsTrigger value="year" className="px-3 text-xs font-medium">Year</TabsTrigger>
-                </TabsList>
-              </Tabs>
-            </div>
-          </CardHeader>
-          <CardContent>
-            {viewMode !== 'year' && (
-              <div className="grid grid-cols-7 gap-1">
-                {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map(d => {
-                  const isSat = d === 'Sat', isSun = d === 'Sun';
+        <div className="relative">
+          <SpiralRings />
+            <Card
+              className="
+                relative
+                z-30
+                overflow-hidden
+                rounded-2xl
+                border-none
+                before:absolute
+                before:inset-0
+                before:pointer-events-none
+                before:bg-[linear-gradient(135deg,rgba(255,255,255,0.16),transparent_28%,transparent_72%,rgba(0,0,0,0.01))]
+                before:content-['']
+              "
+              style={PAPER_STYLE}
+            >
+              <CardHeader className="pb-2">
+                <div className="flex w-full flex-nowrap items-center justify-between gap-2">
+                  <h2 className="text-lg font-semibold tracking-tight text-foreground">
+                    {viewMode === 'year' ? cursor.getFullYear() : monthLabel}
+                  </h2>
+                  <Tabs value={viewMode} onValueChange={setViewMode}>
+                    <TabsList className="h-8">
+                      <TabsTrigger value="week" className="px-3 text-xs font-medium">Week</TabsTrigger>
+                      <TabsTrigger value="month" className="px-3 text-xs font-medium">Month</TabsTrigger>
+                      <TabsTrigger value="year" className="px-3 text-xs font-medium">Year</TabsTrigger>
+                    </TabsList>
+                  </Tabs>
+                </div>
+              </CardHeader>
+            <CardContent>
+              {viewMode !== 'year' && (
+                <div className="grid grid-cols-7 gap-1">
+                  {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map(d => {
+                    const isSat = d === 'Sat', isSun = d === 'Sun';
+                    return (
+                      <div key={d} className={cn('border-b border-border/60 px-1 py-2 text-center text-[11px] font-medium uppercase tracking-wide',
+                        isSun ? 'bg-rose-500/5 text-rose-500/80' : isSat ? 'bg-muted/30 text-muted-foreground/80' : 'text-muted-foreground')}>
+                        {d}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              {viewMode === 'year' ? (
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+                  {Array.from({ length: 12 }, (_, m) => {
+                    const monthDate = new Date(cursor.getFullYear(), m, 1);
+                    const first = new Date(cursor.getFullYear(), m, 1);
+                    const start = new Date(first);
+                    start.setDate(first.getDate() - ((first.getDay() + 6) % 7));
+                    const cells = [];
+                    const d2 = new Date(start);
+                    for (let i = 0; i < 42; i++) { cells.push(new Date(d2)); d2.setDate(d2.getDate() + 1); }
+                    return (
+                      <button key={m}
+                        onClick={() => { setCursor(new Date(cursor.getFullYear(), m, 1)); setViewMode('month'); }}
+                        className="flex flex-col gap-1.5 rounded-xl border p-2.5 text-left transition-colors hover:border-primary/40 hover:bg-primary/5">
+                        <span className="text-sm font-semibold tracking-tight text-foreground">
+                          {monthDate.toLocaleDateString('en-IN', { month: 'long' })}
+                        </span>
+                        <div className="grid grid-cols-7 gap-0.5">
+                          {cells.map((cd, i) => {
+                            const iso = fmtISO(cd);
+                            const inMonth = cd.getMonth() === m;
+                            const isToday = iso === todayISO;
+                            if (!inMonth) return <span key={i} className="size-4" />;
+                            const dayKinds = EVENT_KIND_ORDER.filter(k => byDate[iso]?.some(it => it.kind === k));
+                            return (
+                              <span key={i} className={cn('relative flex size-4 items-center justify-center rounded-full text-[9px] font-medium leading-none',
+                                dayKinds.length === 0 && 'text-muted-foreground',
+                                isToday && 'font-semibold text-primary ring-2 ring-primary')}>
+                                {dayKinds.length === 1 && (
+                                  <span className={cn('absolute inset-0 rounded-full', EVENT_KIND_LIGHT[dayKinds[0]])} />
+                                )}
+                                {dayKinds.length === 2 && (
+                                  <span className="absolute inset-0 flex items-center justify-center">
+                                    {dayKinds.map(k => <span key={k} className={cn('size-2 rounded-full', EVENT_KIND_LIGHT[k])} />)}
+                                  </span>
+                                )}
+                                {dayKinds.length === 3 && (
+                                  <span className="absolute inset-0 flex flex-col items-center justify-between">
+                                    <span className={cn('size-2 rounded-full', EVENT_KIND_LIGHT[dayKinds[0]])} />
+                                    <span className="flex">
+                                      {dayKinds.slice(1).map(k => <span key={k} className={cn('size-2 rounded-full', EVENT_KIND_LIGHT[k])} />)}
+                                    </span>
+                                  </span>
+                                )}
+                                {dayKinds.length > 3 && (
+                                  <span className="absolute inset-0 grid grid-cols-2 grid-rows-2 place-items-center">
+                                    {dayKinds.map(k => <span key={k} className={cn('size-2 rounded-full', EVENT_KIND_LIGHT[k])} />)}
+                                  </span>
+                                )}
+                                <span className="relative z-10">{cd.getDate()}</span>
+                              </span>
+                            );
+                          })}
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              ) : loading ? (
+                <div className="grid grid-cols-7 gap-1">
+                  {gridDays.map((d, i) => (
+                    <div key={i} className={cn('animate-pulse rounded-2xl bg-muted/50', cellMinH, i >= 7 && 'border-t border-border/60')} />
+                  ))}
+                </div>
+              ) : (
+                <div key={fmtISO(gridDays[0]) + viewMode}
+                  className="grid grid-cols-7 gap-1 animate-in fade-in duration-200">
+                  {gridDays.map((d, i) => {
+                    const iso = fmtISO(d);
+                    const inMonth = viewMode === 'week' || d.getMonth() === cursor.getMonth();
+                    const isSaturday = d.getDay() === 6;
+                    const isSunday = d.getDay() === 0;
+                    const items = byDate[iso] || [];
+                    const visible = items.slice(0, visibleCount);
+                    const hidden = items.slice(visibleCount);
+                    return (
+                      <button
+                        key={iso}
+                        onClick={() => setDayOpen(iso)}
+                        onDragOver={e => { if (draggedTaskRef.current) { e.preventDefault(); setDragOverDate(iso); } }}
+                        onDragLeave={() => setDragOverDate(prev => (prev === iso ? null : prev))}
+                        onDrop={async e => {
+                          e.preventDefault();
+                          const dragged = draggedTaskRef.current;
+                          draggedTaskRef.current = null;
+                          setDragOverDate(null);
+                          if (!dragged || dragged.date === iso) return;
+                          try {
+                            await api(`/api/tasks/${dragged.id}`, { method: 'PUT', body: { due_date: iso } });
+                            loadCalendar();
+                            loadToday();
+                          } catch (err) { showToast(err.message, 'error'); }
+                        }}
+                        className={cn('group relative flex flex-col items-center gap-1 rounded-2xl p-1.5 pt-2 text-left transition-all duration-150',
+                          cellMinH,
+                          i >= 7 && 'border-t border-border/60',
+                          !inMonth && 'opacity-40',
+                          (isSaturday || isSunday) && 'bg-muted/30',
+                          'cursor-pointer hover:z-10 hover:bg-background hover:shadow-md',
+                          dragOverDate === iso && 'z-10 ring-2 ring-primary ring-offset-1')}
+                      >
+                        <span className={cn('relative flex size-7 shrink-0 items-center justify-center rounded-full text-sm transition-colors',
+                          iso === todayISO
+                            ? 'font-semibold text-primary ring-2 ring-primary'
+                            : isSunday
+                              ? 'text-rose-500 group-hover:bg-rose-500/10'
+                              : isSaturday
+                                ? 'text-rose-400/80 group-hover:bg-rose-400/10'
+                                : 'text-foreground group-hover:bg-primary/10')}>
+                          {d.getDate()}
+                          {iso === todayISO && <span className="absolute -bottom-1 size-1 rounded-full bg-primary" />}
+                        </span>
+                        <div className={cn('flex w-full flex-1 flex-col gap-0.5',
+                          viewMode === 'week' ? 'overflow-y-auto' : 'overflow-visible')}>
+                          {visible.map((it, idx) => {
+                            const assignee = it.kind === 'task' && taskScope === 'all' && it.assigned_to
+                              ? assignableUsers.find(u => u.username === it.assigned_to)
+                              : null;
+                            const isWeek = viewMode === 'week';
+                            return (
+                              <span
+                                key={idx}
+                                draggable={it.kind === 'task'}
+                                onDragStart={e => {
+                                  if (it.kind !== 'task') return;
+                                  e.stopPropagation();
+                                  draggedTaskRef.current = it;
+                                  e.dataTransfer.effectAllowed = 'move';
+                                }}
+                                className={cn('flex min-w-0 gap-1 px-2 py-0.5 text-[10px] font-medium leading-4',
+                                  isWeek ? 'items-start rounded-md py-1' : 'items-center rounded-full',
+                                  it.kind === 'task' && 'cursor-grab active:cursor-grabbing',
+                                  it.kind === 'task' && (it.status === 'done' ? 'bg-muted text-muted-foreground line-through' : 'bg-primary/15 text-primary'),
+                                  it.kind === 'milestone' && 'bg-amber-500/15 text-amber-700 dark:text-amber-400',
+                                  it.kind === 'visit' && 'bg-teal-500/15 text-teal-700 dark:text-teal-400',
+                                  it.kind === 'order' && 'bg-violet-500/15 text-violet-700 dark:text-violet-400')}>
+                                {assignee && (
+                                  <UserAvatar user={assignee} size="size-3.5" textSize="text-[8px]" initialOnly
+                                    className={cn('shrink-0', isWeek && 'mt-0.5')} />
+                                )}
+                                <span className={cn('min-w-0', isWeek ? 'whitespace-normal break-words' : 'truncate')}>{it.title}</span>
+                              </span>
+                            );
+                          })}
+                          {hidden.length > 0 && (
+                            <div className="relative">
+                              <span className="peer/more block cursor-default px-2 text-[10px] font-medium text-muted-foreground hover:text-foreground">
+                                +{hidden.length} more
+                              </span>
+                              <div className="invisible absolute left-0 top-full z-20 mt-1 w-48 rounded-xl border bg-popover p-1.5 opacity-0 shadow-lg transition-all duration-150 peer-hover/more:visible peer-hover/more:opacity-100">
+                                {hidden.map((it, idx) => (
+                                  <div key={idx} className="truncate rounded-md px-2 py-1 text-xs text-popover-foreground hover:bg-muted">
+                                    {it.title}
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+
+              <div className="mt-4 flex flex-wrap items-center justify-between gap-2">
+                <div className="flex flex-wrap gap-2">
+                  {[
+                    { label: 'Tasks', color: 'bg-primary' },
+                    { label: 'Milestones', color: 'bg-amber-500' },
+                    { label: 'Site visits', color: 'bg-teal-500' },
+                    { label: 'Order due', color: 'bg-violet-500' },
+                  ].map(({ label, color }) => (
+                    <span key={label} className="flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs text-muted-foreground">
+                      <span className={cn('size-2 rounded-full', color)} />
+                      {label}
+                    </span>
+                  ))}
+                </div>
+                <div className="flex items-center gap-1">
+                  <Button variant="outline" size="icon-sm" onClick={() => navigateCursor(-1)} aria-label="Previous">
+                    <ChevronLeftIcon className="size-4" />
+                  </Button>
+                  <Button variant="ghost" size="icon-sm" onClick={goToToday} aria-label="Go to today"
+                    className="bg-muted-foreground/25 font-serif text-base italic text-foreground hover:bg-muted-foreground/40">
+                    t
+                  </Button>
+                  <Button variant="outline" size="icon-sm" onClick={() => navigateCursor(1)} aria-label="Next">
+                    <ChevronRightIcon className="size-4" />
+                  </Button>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Tasks */}
+        <div className="self-start">
+          <Card style={PAPER_STYLE}>
+            <CardHeader className="pb-2">
+              <div className="flex w-full flex-nowrap items-center justify-between gap-2">
+                <CardTitle>Tasks</CardTitle>
+                {canAssign && (
+                  <div className="flex items-center gap-2">
+                    <Tabs value={taskScope} onValueChange={v => { setTaskScope(v); if (v === 'mine') setFilterUser(''); }}>
+                      <TabsList className="h-8">
+                        <TabsTrigger value="mine" className="px-3 text-xs font-medium">Mine</TabsTrigger>
+                        <TabsTrigger value="all" className="px-3 text-xs font-medium">All</TabsTrigger>
+                      </TabsList>
+                    </Tabs>
+                    {taskScope === 'all' && (
+                      <Select value={filterUser || '__all__'} onValueChange={v => setFilterUser(v === '__all__' ? '' : v)}>
+                        <SelectTrigger className="h-8 w-32 text-xs" aria-label="Filter by user">
+                          <SelectValue placeholder="All users" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectGroup>
+                            <SelectItem value="__all__">All users</SelectItem>
+                            {assignableUsers.map(u => (
+                              <SelectItem key={u.id} value={u.username}>{u.display_name || u.username}</SelectItem>
+                            ))}
+                          </SelectGroup>
+                        </SelectContent>
+                      </Select>
+                    )}
+                  </div>
+                )}
+              </div>
+            </CardHeader>
+            <CardContent className="flex flex-col gap-3">
+              <div className="flex flex-wrap gap-2">
+                <Input placeholder="New task…" value={newTask.title} onChange={e => setNewTask({ ...newTask, title: e.target.value })}
+                  onKeyDown={e => e.key === 'Enter' && newTask.title.trim() && addTask()} className="min-w-32 flex-1" />
+                <DueDatePicker value={newTask.due_date} onChange={v => setNewTask({ ...newTask, due_date: v })} />
+                {canAssign && (
+                  <AssignPicker users={assignableUsers} value={newTask.assigned_to}
+                    onChange={v => setNewTask({ ...newTask, assigned_to: v })} />
+                )}
+                <Button type="button" size="icon" onClick={addTask} disabled={!newTask.title.trim()} aria-label="Add task"><PlusIcon /></Button>
+              </div>
+              <div className="flex flex-col gap-1">
+                {visibleTasks.length === 0 && (
+                  <p className="py-4 text-center text-sm text-muted-foreground">
+                    {taskScope === 'mine' && canAssign ? 'Nothing on your plate — check All.' : 'All clear — nothing due.'}
+                  </p>
+                )}
+                {visibleTasks.map(t => {
+                  const overdue = t.due_date < todayISO;
                   return (
-                    <div key={d} className={cn('border-b border-border/60 px-1 py-2 text-center text-[11px] font-medium uppercase tracking-wide',
-                      isSun ? 'bg-rose-500/5 text-rose-500/80' : isSat ? 'bg-muted/30 text-muted-foreground/80' : 'text-muted-foreground')}>
-                      {d}
+                    <div key={t.id} className="flex items-center gap-2 rounded-md px-1 py-1.5 hover:bg-muted">
+                      <Checkbox checked={t.status === 'done'} onCheckedChange={() => toggleTask(t)} />
+                      {editingId === t.id ? (
+                        <Input autoFocus value={editValue} onChange={e => setEditValue(e.target.value)}
+                          onKeyDown={e => e.key === 'Enter' && saveEdit({ ...t, kind: 'task' })}
+                          onBlur={() => saveEdit({ ...t, kind: 'task' })}
+                          className="h-7 min-w-0 flex-1 text-sm" />
+                      ) : (
+                        <span onClick={() => { setEditingId(t.id); setEditValue(t.title); }}
+                          className="min-w-0 flex-1 cursor-text truncate text-sm">{t.title}</span>
+                      )}
+                      {canAssign && t.assigned_to && <Badge variant="secondary" className="shrink-0">{t.assigned_to}</Badge>}
+                      {t.client_name && <Badge variant="outline" className="shrink-0">{t.client_name}</Badge>}
+                      <span className={cn('shrink-0 text-xs', overdue ? 'font-medium text-destructive' : 'text-muted-foreground')}>
+                        {overdue ? formatDate(t.due_date) : 'today'}
+                      </span>
                     </div>
                   );
                 })}
               </div>
-            )}
-
-            {viewMode === 'year' ? (
-              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-                {Array.from({ length: 12 }, (_, m) => {
-                  const monthDate = new Date(cursor.getFullYear(), m, 1);
-                  const first = new Date(cursor.getFullYear(), m, 1);
-                  const start = new Date(first);
-                  start.setDate(first.getDate() - ((first.getDay() + 6) % 7));
-                  const cells = [];
-                  const d2 = new Date(start);
-                  for (let i = 0; i < 42; i++) { cells.push(new Date(d2)); d2.setDate(d2.getDate() + 1); }
-                  return (
-                    <button key={m}
-                      onClick={() => { setCursor(new Date(cursor.getFullYear(), m, 1)); setViewMode('month'); }}
-                      className="flex flex-col gap-1.5 rounded-xl border p-2.5 text-left transition-colors hover:border-primary/40 hover:bg-primary/5">
-                      <span className="text-sm font-semibold tracking-tight text-foreground">
-                        {monthDate.toLocaleDateString('en-IN', { month: 'long' })}
-                      </span>
-                      <div className="grid grid-cols-7 gap-0.5">
-                        {cells.map((cd, i) => {
-                          const iso = fmtISO(cd);
-                          const inMonth = cd.getMonth() === m;
-                          const isToday = iso === todayISO;
-                          if (!inMonth) return <span key={i} className="size-4" />;
-                          const dayKinds = EVENT_KIND_ORDER.filter(k => byDate[iso]?.some(it => it.kind === k));
-                          return (
-                            <span key={i} className={cn('relative flex size-4 items-center justify-center rounded-full text-[9px] font-medium leading-none',
-                              dayKinds.length === 0 && 'text-muted-foreground',
-                              isToday && 'font-semibold text-primary ring-2 ring-primary')}>
-                              {dayKinds.length === 1 && (
-                                <span className={cn('absolute inset-0 rounded-full', EVENT_KIND_LIGHT[dayKinds[0]])} />
-                              )}
-                              {dayKinds.length === 2 && (
-                                <span className="absolute inset-0 flex items-center justify-center">
-                                  {dayKinds.map(k => <span key={k} className={cn('size-2 rounded-full', EVENT_KIND_LIGHT[k])} />)}
-                                </span>
-                              )}
-                              {dayKinds.length === 3 && (
-                                <span className="absolute inset-0 flex flex-col items-center justify-between">
-                                  <span className={cn('size-2 rounded-full', EVENT_KIND_LIGHT[dayKinds[0]])} />
-                                  <span className="flex">
-                                    {dayKinds.slice(1).map(k => <span key={k} className={cn('size-2 rounded-full', EVENT_KIND_LIGHT[k])} />)}
-                                  </span>
-                                </span>
-                              )}
-                              {dayKinds.length > 3 && (
-                                <span className="absolute inset-0 grid grid-cols-2 grid-rows-2 place-items-center">
-                                  {dayKinds.map(k => <span key={k} className={cn('size-2 rounded-full', EVENT_KIND_LIGHT[k])} />)}
-                                </span>
-                              )}
-                              <span className="relative z-10">{cd.getDate()}</span>
-                            </span>
-                          );
-                        })}
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
-            ) : loading ? (
-              <div className="grid grid-cols-7 gap-1">
-                {gridDays.map((d, i) => (
-                  <div key={i} className={cn('animate-pulse rounded-2xl bg-muted/50', cellMinH, i >= 7 && 'border-t border-border/60')} />
-                ))}
-              </div>
-            ) : (
-              <div key={fmtISO(gridDays[0]) + viewMode}
-                className="grid grid-cols-7 gap-1 animate-in fade-in duration-200">
-                {gridDays.map((d, i) => {
-                  const iso = fmtISO(d);
-                  const inMonth = viewMode === 'week' || d.getMonth() === cursor.getMonth();
-                  const isSaturday = d.getDay() === 6;
-                  const isSunday = d.getDay() === 0;
-                  const items = byDate[iso] || [];
-                  const visible = items.slice(0, visibleCount);
-                  const hidden = items.slice(visibleCount);
-                  return (
-                    <button
-                      key={iso}
-                      onClick={() => setDayOpen(iso)}
-                      onDragOver={e => { if (draggedTaskRef.current) { e.preventDefault(); setDragOverDate(iso); } }}
-                      onDragLeave={() => setDragOverDate(prev => (prev === iso ? null : prev))}
-                      onDrop={async e => {
-                        e.preventDefault();
-                        const dragged = draggedTaskRef.current;
-                        draggedTaskRef.current = null;
-                        setDragOverDate(null);
-                        if (!dragged || dragged.date === iso) return;
-                        try {
-                          await api(`/api/tasks/${dragged.id}`, { method: 'PUT', body: { due_date: iso } });
-                          loadCalendar();
-                          loadToday();
-                        } catch (err) { showToast(err.message, 'error'); }
-                      }}
-                      className={cn('group relative flex flex-col items-center gap-1 rounded-2xl p-1.5 pt-2 text-left transition-all duration-150',
-                        cellMinH,
-                        i >= 7 && 'border-t border-border/60',
-                        !inMonth && 'opacity-40',
-                        (isSaturday || isSunday) && 'bg-muted/30',
-                        'cursor-pointer hover:z-10 hover:bg-background hover:shadow-md',
-                        dragOverDate === iso && 'z-10 ring-2 ring-primary ring-offset-1')}
-                    >
-                      <span className={cn('relative flex size-7 shrink-0 items-center justify-center rounded-full text-sm transition-colors',
-                        iso === todayISO
-                          ? 'font-semibold text-primary ring-2 ring-primary'
-                          : isSunday
-                            ? 'text-rose-500 group-hover:bg-rose-500/10'
-                            : isSaturday
-                              ? 'text-rose-400/80 group-hover:bg-rose-400/10'
-                              : 'text-foreground group-hover:bg-primary/10')}>
-                        {d.getDate()}
-                        {iso === todayISO && <span className="absolute -bottom-1 size-1 rounded-full bg-primary" />}
-                      </span>
-                      <div className="flex w-full flex-1 flex-col gap-0.5 overflow-visible">
-                        {visible.map((it, idx) => (
-                          <span
-                            key={idx}
-                            draggable={it.kind === 'task'}
-                            onDragStart={e => {
-                              if (it.kind !== 'task') return;
-                              e.stopPropagation();
-                              draggedTaskRef.current = it;
-                              e.dataTransfer.effectAllowed = 'move';
-                            }}
-                            className={cn('truncate rounded-full px-2 py-0.5 text-[10px] font-medium leading-4',
-                              it.kind === 'task' && 'cursor-grab active:cursor-grabbing',
-                              it.kind === 'task' && (it.status === 'done' ? 'bg-muted text-muted-foreground line-through' : 'bg-primary/15 text-primary'),
-                              it.kind === 'milestone' && 'bg-amber-500/15 text-amber-700 dark:text-amber-400',
-                              it.kind === 'visit' && 'bg-teal-500/15 text-teal-700 dark:text-teal-400',
-                              it.kind === 'order' && 'bg-violet-500/15 text-violet-700 dark:text-violet-400')}>
-                            {it.title}
-                          </span>
-                        ))}
-                        {hidden.length > 0 && (
-                          <div className="relative">
-                            <span className="peer/more block cursor-default px-2 text-[10px] font-medium text-muted-foreground hover:text-foreground">
-                              +{hidden.length} more
-                            </span>
-                            <div className="invisible absolute left-0 top-full z-20 mt-1 w-48 rounded-xl border bg-popover p-1.5 opacity-0 shadow-lg transition-all duration-150 peer-hover/more:visible peer-hover/more:opacity-100">
-                              {hidden.map((it, idx) => (
-                                <div key={idx} className="truncate rounded-md px-2 py-1 text-xs text-popover-foreground hover:bg-muted">
-                                  {it.title}
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
-            )}
-
-            <div className="mt-4 flex flex-wrap items-center justify-between gap-2">
-              <div className="flex flex-wrap gap-2">
-                {[
-                  { label: 'Tasks', color: 'bg-primary' },
-                  { label: 'Milestones', color: 'bg-amber-500' },
-                  { label: 'Site visits', color: 'bg-teal-500' },
-                  { label: 'Order due', color: 'bg-violet-500' },
-                ].map(({ label, color }) => (
-                  <span key={label} className="flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs text-muted-foreground">
-                    <span className={cn('size-2 rounded-full', color)} />
-                    {label}
-                  </span>
-                ))}
-              </div>
-              <div className="flex items-center gap-1">
-                <Button variant="outline" size="icon-sm" onClick={() => navigateCursor(-1)} aria-label="Previous">
-                  <ChevronLeftIcon className="size-4" />
-                </Button>
-                <Button variant="ghost" size="icon-sm" onClick={goToToday} aria-label="Go to today"
-                  className="bg-muted-foreground/25 font-serif text-base italic text-foreground hover:bg-muted-foreground/40">
-                  t
-                </Button>
-                <Button variant="outline" size="icon-sm" onClick={() => navigateCursor(1)} aria-label="Next">
-                  <ChevronRightIcon className="size-4" />
-                </Button>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Tasks */}
-        <Card>
-          <CardHeader className="pb-2">
-            <div className="flex w-full flex-nowrap items-center justify-between gap-2">
-              <CardTitle>Tasks</CardTitle>
-              {canAssign && (
-                <div className="flex items-center gap-2">
-                  <Tabs value={taskScope} onValueChange={v => { setTaskScope(v); if (v === 'mine') setFilterUser(''); }}>
-                    <TabsList className="h-8">
-                      <TabsTrigger value="mine" className="px-3 text-xs font-medium">Mine</TabsTrigger>
-                      <TabsTrigger value="all" className="px-3 text-xs font-medium">All</TabsTrigger>
-                    </TabsList>
-                  </Tabs>
-                  {taskScope === 'all' && (
-                    <Select value={filterUser || '__all__'} onValueChange={v => setFilterUser(v === '__all__' ? '' : v)}>
-                      <SelectTrigger className="h-8 w-32 text-xs" aria-label="Filter by user">
-                        <SelectValue placeholder="All users" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectGroup>
-                          <SelectItem value="__all__">All users</SelectItem>
-                          {assignableUsers.map(u => (
-                            <SelectItem key={u.id} value={u.username}>{u.display_name || u.username}</SelectItem>
-                          ))}
-                        </SelectGroup>
-                      </SelectContent>
-                    </Select>
-                  )}
-                </div>
-              )}
-            </div>
-          </CardHeader>
-          <CardContent className="flex flex-col gap-3">
-            <div className="flex flex-wrap gap-2">
-              <Input placeholder="New task…" value={newTask.title} onChange={e => setNewTask({ ...newTask, title: e.target.value })}
-                onKeyDown={e => e.key === 'Enter' && newTask.title.trim() && addTask()} className="min-w-32 flex-1" />
-              <DueDatePicker value={newTask.due_date} onChange={v => setNewTask({ ...newTask, due_date: v })} />
-              {canAssign && (
-                <AssignPicker users={assignableUsers} value={newTask.assigned_to}
-                  onChange={v => setNewTask({ ...newTask, assigned_to: v })} />
-              )}
-              <Button type="button" size="icon" onClick={addTask} disabled={!newTask.title.trim()} aria-label="Add task"><PlusIcon /></Button>
-            </div>
-            <div className="flex flex-col gap-1">
-              {visibleTasks.length === 0 && (
-                <p className="py-4 text-center text-sm text-muted-foreground">
-                  {taskScope === 'mine' && canAssign ? 'Nothing on your plate — check All.' : 'All clear — nothing due.'}
-                </p>
-              )}
-              {visibleTasks.map(t => {
-                const overdue = t.due_date < todayISO;
-                return (
-                  <div key={t.id} className="flex items-center gap-2 rounded-md px-1 py-1.5 hover:bg-muted">
-                    <Checkbox checked={t.status === 'done'} onCheckedChange={() => toggleTask(t)} />
-                    {editingId === t.id ? (
-                      <Input autoFocus value={editValue} onChange={e => setEditValue(e.target.value)}
-                        onKeyDown={e => e.key === 'Enter' && saveEdit({ ...t, kind: 'task' })}
-                        onBlur={() => saveEdit({ ...t, kind: 'task' })}
-                        className="h-7 min-w-0 flex-1 text-sm" />
-                    ) : (
-                      <span onClick={() => { setEditingId(t.id); setEditValue(t.title); }}
-                        className="min-w-0 flex-1 cursor-text truncate text-sm">{t.title}</span>
-                    )}
-                    {canAssign && t.assigned_to && <Badge variant="secondary" className="shrink-0">{t.assigned_to}</Badge>}
-                    {t.client_name && <Badge variant="outline" className="shrink-0">{t.client_name}</Badge>}
-                    <span className={cn('shrink-0 text-xs', overdue ? 'font-medium text-destructive' : 'text-muted-foreground')}>
-                      {overdue ? formatDate(t.due_date) : 'today'}
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
+        </div>
       </div>
 
       {/* Day details */}
@@ -697,26 +831,35 @@ export default function Dashboard() {
             <DaySection label="Tasks" icon={<ListTodoIcon className="size-3.5 text-primary" />}
               addColorClass="bg-primary/50 hover:bg-primary"
               count={dayTasks.length} onAdd={() => setQuickAdd(q => (q === 'task' ? null : 'task'))}>
-              {dayTasks.map((it, i) => (
-                <div key={i} className={cn('group flex items-center gap-2 rounded-md px-1 py-1.5 text-sm transition-colors',
-                  it.status === 'done' ? 'bg-muted/50 hover:bg-muted' : 'bg-primary/10 hover:bg-primary/15')}>
-                  <Checkbox checked={it.status === 'done'} onCheckedChange={() => toggleTask(it)}
+              {dayTasks.map((it, i) => {
+                const assignee = it.assigned_to ? assignableUsers.find(u => u.username === it.assigned_to) : null;
+                return (
+                  <div key={i} className={cn('group flex items-center gap-2 rounded-md px-1 py-1.5 text-sm transition-colors',
+                    it.status === 'done' ? 'bg-muted/50 hover:bg-muted' : 'bg-primary/10 hover:bg-primary/15')}>
+                    <Checkbox checked={it.status === 'done'} onCheckedChange={() => toggleTask(it)}
   className="border-2 border-muted-foreground/50 data-[state=checked]:border-primary data-[state=checked]:bg-primary data-[state=checked]:text-white" />
-                  {editingId === it.id ? (
-                    <Input autoFocus value={editValue} onChange={e => setEditValue(e.target.value)}
-                      onKeyDown={e => e.key === 'Enter' && saveEdit(it)} onBlur={() => saveEdit(it)}
-                      className="h-6 flex-1 text-sm" />
-                  ) : (
-                    <span onClick={() => { setEditingId(it.id); setEditValue(it.title); }}
-                      className={cn('flex-1 cursor-text truncate', it.status === 'done' && 'text-muted-foreground line-through')}>{it.title}</span>
-                  )}
-                  {it.client_name && <Badge variant="outline" className="shrink-0">{it.client_name}</Badge>}
-                  <Button variant="ghost" size="icon-sm" onClick={() => deleteEvent('task', it.id)} aria-label="Delete task"
-                    className="size-6 shrink-0 opacity-0 text-muted-foreground transition-opacity hover:text-destructive group-hover:opacity-100">
-                    <Trash2Icon className="size-3.5" />
-                  </Button>
-                </div>
-              ))}
+                    {editingId === it.id ? (
+                      <Input autoFocus value={editValue} onChange={e => setEditValue(e.target.value)}
+                        onKeyDown={e => e.key === 'Enter' && saveEdit(it)} onBlur={() => saveEdit(it)}
+                        className="h-6 flex-1 text-sm" />
+                    ) : (
+                      <span onClick={() => { setEditingId(it.id); setEditValue(it.title); }}
+                        className={cn('flex-1 cursor-text truncate', it.status === 'done' && 'text-muted-foreground line-through')}>{it.title}</span>
+                    )}
+                    {it.client_name && <Badge variant="outline" className="shrink-0">{it.client_name}</Badge>}
+                    <div className="relative size-6 shrink-0">
+                      {assignee && (
+                        <UserAvatar user={assignee} size="size-6" textSize="text-[10px]" initialOnly
+                          className="absolute inset-0 transition-opacity duration-150 group-hover:opacity-0" />
+                      )}
+                      <Button variant="ghost" size="icon-sm" onClick={() => deleteEvent('task', it.id)} aria-label="Delete task"
+                        className="absolute inset-0 size-6 shrink-0 opacity-0 text-muted-foreground transition-opacity duration-150 hover:text-destructive group-hover:opacity-100">
+                        <Trash2Icon className="size-3.5" />
+                      </Button>
+                    </div>
+                  </div>
+                );
+              })}
               {quickAdd === 'task' && (
                 <QuickAddRow placeholder="New task…" onSubmit={async (title) => {
                   try {

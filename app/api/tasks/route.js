@@ -8,7 +8,6 @@ export async function GET(req) {
   const user = getUserFromRequest(req);
   const { searchParams } = new URL(req.url);
   const scope = searchParams.get('scope') || 'today';
-  // Staff are always restricted to their own tasks; owners/admins choose via ?who=mine|all.
   const mineOnly = isStaff(user) || searchParams.get('who') === 'mine';
   const mineClause = mineOnly ? 'AND t.assigned_to = ?' : '';
   if (scope === 'range') {
@@ -21,12 +20,14 @@ export async function GET(req) {
       ORDER BY t.due_date, t.id`, mineOnly ? [from, to, user.username] : [from, to]);
     return NextResponse.json(rows);
   }
-  // today + overdue open tasks
+  // today + overdue open tasks — "today" is passed by the client (its local date),
+  // since SQLite's date('now') is UTC and can lag behind the user's local calendar date.
+  const today = searchParams.get('today') || new Date().toISOString().slice(0, 10);
   const rows = await queryAll(`
     SELECT t.*, c.name AS client_name FROM tasks t
     LEFT JOIN clients c ON c.id = t.client_id
-    WHERE t.status = 'open' AND t.due_date <= date('now') AND t.is_deleted_record = 0 ${mineClause}
-    ORDER BY t.due_date, t.id`, mineOnly ? [user.username] : []);
+    WHERE t.status = 'open' AND t.due_date <= ? AND t.is_deleted_record = 0 ${mineClause}
+    ORDER BY t.due_date, t.id`, mineOnly ? [today, user.username] : [today]);
   return NextResponse.json(rows);
 }
 
@@ -39,7 +40,7 @@ export async function POST(req) {
   // Staff can only create tasks for themselves — ignore any assignee they send.
   const assignedTo = isStaff(user) ? user.username : (b.assigned_to || user?.username || null);
   const { lastId } = await execute(
-    'INSERT INTO tasks (title, due_date, assigned_to, client_id, created_by) VALUES (?, ?, ?, ?, ?)',
-    [b.title.trim(), b.due_date, assignedTo, b.client_id || null, user?.username || null]);
+    'INSERT INTO tasks (title, due_date, assigned_to, client_id, created_by, status) VALUES (?, ?, ?, ?, ?, ?)',
+    [b.title.trim(), b.due_date, assignedTo, b.client_id || null, user?.username || null, 'open']);
   return NextResponse.json({ id: lastId });
 }
