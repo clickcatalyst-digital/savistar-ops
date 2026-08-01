@@ -1,3 +1,5 @@
+// app/api/site-visits/[id]/route.js
+
 import { NextResponse } from 'next/server';
 import { softDelete } from '@/lib/db';
 

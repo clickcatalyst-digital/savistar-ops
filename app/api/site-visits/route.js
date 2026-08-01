@@ -1,3 +1,5 @@
+// app/api/site-visits/route.js
+
 import { NextResponse } from 'next/server';
 import { execute } from '@/lib/db';
 import { getUserFromRequest } from '@/lib/auth';

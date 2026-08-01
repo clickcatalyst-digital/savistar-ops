@@ -41,26 +41,23 @@ const buttonVariants = cva(
   }
 )
 
-// forwardRef so Radix triggers (DropdownMenuTrigger/DialogTrigger asChild) can attach a ref
-// under React 18 without warning.
-const Button = React.forwardRef(function Button({
+function Button({
   className,
   variant = "default",
   size = "default",
   asChild = false,
   ...props
-}, ref) {
+}) {
   const Comp = asChild ? Slot.Root : "button"
 
   return (
     <Comp
-      ref={ref}
       data-slot="button"
       data-variant={variant}
       data-size={size}
       className={cn(buttonVariants({ variant, size, className }))}
       {...props} />
   );
-})
+}
 
 export { Button, buttonVariants }
