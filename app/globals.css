@@ -41,6 +41,32 @@
   --chart-3: hsl(32 95% 44%);
   --chart-4: hsl(262 60% 55%); /* independent chart color, decoupled from status "blocked" */
   --chart-5: hsl(0 72% 51%);
+
+  /* Event-kind palette — calendar dots/legend/chips/DaySection icons. Independent
+     from --chart-* and --success/--warning so the calendar's visual language can
+     evolve on its own. */
+  --milestone: hsl(38 92% 50%);
+  --milestone-foreground: hsl(26 90% 31%);
+  --visit: hsl(173 58% 39%);
+  --visit-foreground: hsl(175 84% 22%);
+  --order: hsl(262 60% 55%);
+  --order-foreground: hsl(263 60% 41%);
+  --weekend: hsl(350 89% 60%);
+
+  /* Paper card finish — CalendarCard/TasksCard. Two base tones + grain/sheen
+     layers, composed in .paper-surface below. */
+  --paper-base-1: #fcfaf6;
+  --paper-base-2: #f8f5ee;
+  --paper-tint: #faf7f1;
+  --paper-grain: rgba(90, 75, 40, 0.024);
+  --paper-grain-light: rgba(255, 255, 255, 0.10);
+  --paper-sheen: rgba(255, 255, 255, 0.16);
+  --paper-shade: rgba(0, 0, 0, 0.010);
+  --paper-border: rgba(120, 100, 70, 0.08);
+  --paper-inset-top: rgba(255, 255, 255, 0.82);
+  --paper-inset-bottom: rgba(0, 0, 0, 0.025);
+  --paper-shadow-1: rgba(0, 0, 0, 0.05);
+  --paper-shadow-2: rgba(0, 0, 0, 0.20);
 }
 
 [data-theme="dark"] {
@@ -76,6 +102,28 @@
   --chart-3: hsl(32 90% 56%);
   --chart-4: hsl(262 65% 68%);
   --chart-5: hsl(0 72% 60%);
+
+  --milestone: hsl(38 92% 58%);
+  --milestone-foreground: hsl(38 92% 72%);
+  --visit: hsl(173 58% 48%);
+  --visit-foreground: hsl(173 58% 66%);
+  --order: hsl(262 65% 68%);
+  --order-foreground: hsl(262 65% 78%);
+  --weekend: hsl(350 89% 68%);
+
+  /* Paper becomes a dim, warm-neutral card rather than literal white paper. */
+  --paper-base-1: hsl(222 18% 14%);
+  --paper-base-2: hsl(222 20% 11%);
+  --paper-tint: hsl(222 19% 13%);
+  --paper-grain: rgba(255, 255, 255, 0.006);
+  --paper-grain-light: rgba(255, 255, 255, 0.01);
+  --paper-sheen: rgba(255, 255, 255, 0.015);
+  --paper-shade: rgba(0, 0, 0, 0.16);
+  --paper-border: rgba(255, 255, 255, 0.07);
+  --paper-inset-top: rgba(255, 255, 255, 0.05);
+  --paper-inset-bottom: rgba(0, 0, 0, 0.35);
+  --paper-shadow-1: rgba(0, 0, 0, 0.35);
+  --paper-shadow-2: rgba(0, 0, 0, 0.55);
 }
 
 @theme inline {
@@ -111,6 +159,14 @@
   --color-chart-4: var(--chart-4);
   --color-chart-5: var(--chart-5);
 
+  --color-milestone: var(--milestone);
+  --color-milestone-foreground: var(--milestone-foreground);
+  --color-visit: var(--visit);
+  --color-visit-foreground: var(--visit-foreground);
+  --color-order: var(--order);
+  --color-order-foreground: var(--order-foreground);
+  --color-weekend: var(--weekend);
+
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
@@ -129,6 +185,36 @@
   .tnum {
     font-variant-numeric: tabular-nums;
   }
+}
+
+/* Paper card finish — CalendarCard + TasksCard on the dashboard. Two dot layers at
+   different scales/offsets avoid an obvious repeating grid; the shadow lifts it
+   off the page like a sheet resting on the surface below. */
+.paper-surface {
+  background-color: var(--paper-tint);
+  background-image:
+    radial-gradient(ellipse at center, transparent 68%, var(--paper-shade) 100%),
+    radial-gradient(circle at 24% 18%, var(--paper-sheen) 0%, transparent 38%),
+    radial-gradient(circle at 78% 82%, var(--paper-shade) 0%, transparent 42%),
+    radial-gradient(var(--paper-grain) 0.55px, transparent 0.65px),
+    radial-gradient(var(--paper-grain-light) 0.5px, transparent 0.6px),
+    linear-gradient(180deg, var(--paper-base-1) 0%, var(--paper-base-2) 100%);
+  background-size: 100% 100%, 100% 100%, 100% 100%, 5px 5px, 9px 9px, 100% 100%;
+  background-position: center, center, center, 0 0, 2px 3px, center;
+  border: 1px solid var(--paper-border);
+  box-shadow:
+    inset 0 1px 0 var(--paper-inset-top),
+    inset 0 -1px 0 var(--paper-inset-bottom),
+    0 3px 8px var(--paper-shadow-1),
+    0 20px 40px -20px var(--paper-shadow-2);
+}
+
+.scrollbar-none {
+  scrollbar-width: none;       /* Firefox */
+  -ms-overflow-style: none;    /* old Edge/IE */
+}
+.scrollbar-none::-webkit-scrollbar {
+  display: none;               /* Chrome/Safari/new Edge */
 }
 
 /* Content column — centered and fluid-wide (defined once; every page uses `container`).
